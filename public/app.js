@@ -518,14 +518,22 @@ function renderChat(chat) {
 function renderSavedStoryBook(book) {
   const pages = book.pageIds.map(pageId => state.data.bookPages.find(page => page.id === pageId)).filter(Boolean);
   const cover = pages.find(page => page.imageUrl) || pages[0];
+  const submitted = book.status === "submitted" || Boolean(book.submittedWorkId);
   return `
     <article class="saved-book">
       ${cover?.imageUrl ? `<img class="saved-book-cover" src="${html(cover.imageUrl)}" alt="${html(book.title)} cover">` : `<div class="saved-book-cover placeholder">No image yet</div>`}
       <div class="saved-book-body">
-        <h4>${html(book.title)}</h4>
+        <div class="saved-book-head">
+          <h4>${html(book.title)}</h4>
+          ${submitted ? `<span class="chip ok">Submitted</span>` : ""}
+        </div>
         <p>${pages.length} pages · ${new Date(book.updatedAt || book.createdAt).toLocaleDateString()}</p>
         ${book.prompt ? `<p><strong>Prompt:</strong> ${html(book.prompt)}</p>` : ""}
         <p>${html(pages[0]?.text || "")}</p>
+        <div class="saved-book-actions">
+          <button class="secondary" type="button" data-read-saved-book="${book.id}">Read</button>
+          <button class="primary" type="button" data-submit-saved-book="${book.id}" ${submitted ? "disabled" : ""}>${submitted ? "Submitted" : "Submit"}</button>
+        </div>
       </div>
     </article>`;
 }
@@ -639,6 +647,41 @@ function bindView() {
   bindStoryPager();
 
   $("[data-export-pdf]")?.addEventListener("click", exportStoryPdf);
+
+  document.querySelectorAll("[data-read-saved-book]").forEach(button => {
+    button.addEventListener("click", () => {
+      const book = (state.data.storyBooks || []).find(item => item.id === button.dataset.readSavedBook);
+      if (!book) return;
+      const text = book.pageIds
+        .map(pageId => state.data.bookPages.find(page => page.id === pageId))
+        .filter(Boolean)
+        .map(page => page.text)
+        .join("\n");
+      readStoryText(text);
+    });
+  });
+
+  document.querySelectorAll("[data-submit-saved-book]").forEach(button => {
+    button.addEventListener("click", async () => {
+      button.disabled = true;
+      button.textContent = "Submitting...";
+      try {
+        await api("/api/storybook/submit", {
+          method: "POST",
+          body: JSON.stringify({
+            studentId: state.user.id,
+            storyBookId: button.dataset.submitSavedBook
+          })
+        });
+        await refresh();
+        renderApp();
+      } catch (error) {
+        button.disabled = false;
+        button.textContent = "Submit";
+        alert(error.message);
+      }
+    });
+  });
 
   $("[data-save-story]")?.addEventListener("click", async event => {
     const pages = currentStudentStoryPages();

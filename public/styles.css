@@ -730,6 +730,13 @@ textarea {
   min-width: 0;
 }
 
+.saved-book-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
 .saved-book-body h4,
 .saved-book-body p {
   margin: 0;
@@ -748,6 +755,23 @@ textarea {
   -webkit-line-clamp: 2;
   -webkit-box-orient: vertical;
   overflow: hidden;
+}
+
+.saved-book-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.saved-book-actions .primary,
+.saved-book-actions .secondary {
+  min-height: 32px;
+}
+
+.saved-book-actions button:disabled {
+  opacity: 0.65;
+  cursor: not-allowed;
 }
 
 .book-grid {

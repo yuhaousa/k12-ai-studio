@@ -543,6 +543,50 @@ async function handleApi(req, res) {
       return send(res, 201, { storyBook });
     }
 
+    if (route === "POST /api/storybook/submit") {
+      const body = await parseBody(req);
+      const storyBook = db.storyBooks.find(book => book.id === body.storyBookId && book.studentId === body.studentId);
+      if (!storyBook) return send(res, 404, { error: "Saved storybook not found" });
+      const pages = storyBook.pageIds
+        .map(pageId => db.bookPages.find(page => page.id === pageId && page.studentId === body.studentId))
+        .filter(Boolean);
+      if (!pages.length) return send(res, 400, { error: "Saved storybook has no pages" });
+      const existing = db.works.find(work => work.storyBookId === storyBook.id && work.studentId === body.studentId);
+      const content = pages.map(page => `Page ${page.page}: ${page.text}`).join("\n\n");
+      if (existing) {
+        existing.title = storyBook.title;
+        existing.content = content;
+        existing.feedback = storyBook.prompt ? `Prompt: ${storyBook.prompt}` : "Storybook submitted for teacher review.";
+        existing.status = "submitted";
+        existing.updatedAt = new Date().toISOString();
+        storyBook.status = "submitted";
+        storyBook.submittedWorkId = existing.id;
+        storyBook.submittedAt = existing.updatedAt;
+        writeDb(db);
+        return send(res, 200, { work: existing, storyBook });
+      }
+      const work = {
+        id: id("w"),
+        studentId: body.studentId,
+        assignmentId: "storybook",
+        type: "storybook",
+        storyBookId: storyBook.id,
+        title: storyBook.title,
+        content,
+        feedback: storyBook.prompt ? `Prompt: ${storyBook.prompt}` : "Storybook submitted for teacher review.",
+        status: "submitted",
+        score: 0,
+        updatedAt: new Date().toISOString()
+      };
+      db.works.unshift(work);
+      storyBook.status = "submitted";
+      storyBook.submittedWorkId = work.id;
+      storyBook.submittedAt = work.updatedAt;
+      db.auditLogs.unshift({ id: id("log"), userId: body.studentId, action: "Submitted storybook for teacher review", createdAt: new Date().toISOString() });
+      writeDb(db);
+      return send(res, 201, { work, storyBook });
+    }
+
     if (route === "POST /api/history/chat") {
       const body = await parseBody(req);
       const moderation = moderateText(body.question);
