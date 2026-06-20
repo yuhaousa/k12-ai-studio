@@ -1,14 +1,48 @@
+const i18n = {
+  en: {
+    signin: "Sign in", chooserole: "Choose a school role to open the matching workspace.", password: "Password", enterplatform: "Enter platform",
+    dashboard: "Dashboard", studio: "AI Learning Studio", portfolio: "Portfolio", review: "Teacher Review", class: "Class Progress", users: "Users & Roles", ai: "AI Settings", compliance: "Compliance & Records",
+    learning: "Learning", aitools: "AI Creation Tools", myspace: "My Space", overview: "Overview", teaching: "Teaching Management",
+    writingassistant: "Writing Assistant", storybook: "AI Storybook", history: "History Inquiry", dashboard_label: "Learning Dashboard",
+    teacherdashboard: "Teacher Dashboard", studentreviews: "Review Submissions", classProgress: "Class Progress", admindashboard: "Admin Dashboard", usemanagement: "User & Roles", aisettings: "AI Settings", compliance_label: "Compliance & Records",
+    logout: "Logout", closed: "Close", previous: "‹ Previous", next: "Next ›", readaloud: "Read aloud", save: "Save", submit: "Submit", approve: "Approve", read: "Read",
+    submittedwork: "Submitted Work", nowriting: "No writing submitted yet.", savedbooks: "Saved Storybooks", nobooks: "No storybooks saved yet.",
+    writing_sample: "My campus story", writing_draft: "During lunch today, I saw classmates helping each other on the playground, and felt warm in my heart.", story_seed: "Enter your description (Prompt)", style: "Select Style", language: "Language", generate: "🪄 Generate Storybook", exportpdf: "Export PDF", saveto: "Save to portfolio", submitted: "Submitted",
+    close: "Close", page: "Page", pending: "pending", score: "Score"
+  },
+  zh: {
+    signin: "登入", chooserole: "選擇一個校園角色來開啟對應的工作區。", password: "密碼", enterplatform: "進入平台",
+    dashboard: "儀表板", studio: "AI 學習工作室", portfolio: "作品集", review: "教師批改", class: "班級進度", users: "用戶和角色", ai: "AI 設定", compliance: "合規記錄",
+    learning: "學習", aitools: "AI 創作工具", myspace: "我的空間", overview: "概覽", teaching: "教學管理",
+    writingassistant: "寫作助手", storybook: "AI 繪本", history: "歷史探究", dashboard_label: "學習儀表板",
+    teacherdashboard: "教師儀表板", studentreviews: "批改審閱", classProgress: "班級進度", admindashboard: "管理儀表板", usemanagement: "帳戶權限", aisettings: "AI 設定", compliance_label: "合規紀錄",
+    logout: "登出", closed: "關閉", previous: "‹ 上一頁", next: "下一頁 ›", readaloud: "朗讀", save: "保存", submit: "提交", approve: "批准", read: "閱讀",
+    submittedwork: "已提交作業", nowriting: "還未提交寫作。", savedbooks: "已保存的繪本", nobooks: "還未保存繪本。",
+    writing_sample: "我的校園故事", writing_draft: "今天小息時，我在操場看見同學互相幫忙，覺得校園很溫暖。", story_seed: "輸入你的描述 (Prompt)", style: "選擇風格", language: "語言", generate: "🪄 生成繪本", exportpdf: "匯出 PDF", saveto: "保存到作品集", submitted: "已提交",
+    close: "關閉", page: "頁", pending: "待審", score: "分數"
+  }
+};
+
 const state = {
   user: JSON.parse(localStorage.getItem("ai-school-user") || "null"),
   data: null,
   page: "dashboard",
   tool: "writing",
+  language: localStorage.getItem("ai-school-language") || "zh",
   storyMessage: "",
   storyPageIndex: 0,
   currentStoryPages: [],
   storyTitle: "",
-  storyPrompt: ""
+  storyPrompt: "",
+  portfolioBookId: "",
+  portfolioPageIndex: 0,
+  workReaderId: "",
+  workReaderPageIndex: 0
 };
+
+function t(key) {
+  return i18n[state.language]?.[key] || i18n.zh[key] || key;
+}
 
 const $ = selector => document.querySelector(selector);
 
@@ -31,6 +65,51 @@ function currentStudentStoryPages() {
 function currentStoryIsSaved() {
   const pageIds = currentStudentStoryPages().map(page => page.id);
   return Boolean(pageIds.length && state.data.storyBooks?.some(book => book.studentId === state.user.id && pageIds.every(pageId => book.pageIds.includes(pageId))));
+}
+
+function savedBookPages(book) {
+  return (book?.pageIds || []).map(pageId => state.data.bookPages.find(page => page.id === pageId)).filter(Boolean);
+}
+
+function workReaderPages(work) {
+  if (work?.storyBookId) {
+    const storyBook = state.data.storyBooks.find(book => book.id === work.storyBookId && book.studentId === work.studentId);
+    const pages = savedBookPages(storyBook);
+    if (pages.length) {
+      return pages.map((page, index) => ({
+        id: `${work.id}-page-${index + 1}`,
+        page: index + 1,
+        text: page.text,
+        imageUrl: page.imageUrl,
+        imagePrompt: page.imagePrompt,
+        imageError: page.imageError,
+        imageStatus: page.imageStatus
+      }));
+    }
+  }
+
+  const text = String(work?.content || "").trim();
+  if (!text) return [];
+  const sentences = text.match(/[^。！？!?；;\n]+[。！？!?；;]?/g) || [text];
+  const pages = [];
+  let buffer = "";
+
+  sentences.forEach(sentence => {
+    const next = `${buffer}${sentence}`.trim();
+    if (!buffer || next.length <= 90) {
+      buffer = next;
+      return;
+    }
+    pages.push(buffer.trim());
+    buffer = sentence.trim();
+  });
+
+  if (buffer.trim()) pages.push(buffer.trim());
+  return pages.map((page, index) => ({
+    id: `${work.id}-page-${index + 1}`,
+    page: index + 1,
+    text: page
+  }));
 }
 
 function imageErrorMessage(error) {
@@ -105,6 +184,12 @@ function readStoryText(text) {
   window.speechSynthesis.speak(utterance);
 }
 
+function stopStoryText() {
+  if ("speechSynthesis" in window) {
+    window.speechSynthesis.cancel();
+  }
+}
+
 function refreshStoryOutputs() {
   const pages = currentStudentStoryPages();
   if ($("#storyResult")) {
@@ -170,13 +255,17 @@ function renderLogin() {
           <p>Demo passwords: student / teacher / admin</p>
         </div>
         <form class="login-form" id="loginForm">
-          <div>
-            <h2>Sign in</h2>
-            <p class="muted">Choose a school role to open the matching workspace.</p>
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px">
+            <h2 style="margin:0">${t("signin")}</h2>
+            <div style="display:flex;gap:4px;font-size:12px">
+              <button class="ghost" id="loginLangEn" style="min-height:28px;padding:0 8px;${state.language === "en" ? "background:rgba(91,79,232,0.2);" : ""}" type="button">EN</button>
+              <button class="ghost" id="loginLangZh" style="min-height:28px;padding:0 8px;${state.language === "zh" ? "background:rgba(91,79,232,0.2);" : ""}" type="button">中</button>
+            </div>
           </div>
+          <p class="muted">${t("chooserole")}</p>
           <label class="field"><span>Role</span><select name="role"><option value="student">Student</option><option value="teacher">Teacher</option><option value="admin">Admin</option></select></label>
-          <label class="field"><span>Password</span><input name="password" type="password" value="student"></label>
-          <button class="primary" type="submit">Enter platform</button>
+          <label class="field"><span>${t("password")}</span><input name="password" type="password" value="student"></label>
+          <button class="primary" type="submit">${t("enterplatform")}</button>
           <div class="error" id="loginError"></div>
         </form>
       </section>
@@ -198,32 +287,43 @@ function renderLogin() {
       $("#loginError").textContent = error.message;
     }
   });
+  
+  $("#loginLangEn")?.addEventListener("click", () => {
+    state.language = "en";
+    localStorage.setItem("ai-school-language", "en");
+    renderLogin();
+  });
+  $("#loginLangZh")?.addEventListener("click", () => {
+    state.language = "zh";
+    localStorage.setItem("ai-school-language", "zh");
+    renderLogin();
+  });
 }
 
 function navGroups() {
   if (state.user.role === "student") {
     return [
-      { title: "學習", items: [{ id: "dashboard", icon: "🏠", label: "學習主頁" }] },
+      { title: t("learning"), items: [{ id: "dashboard", icon: "🏠", label: t("dashboard") }] },
       {
-        title: "AI 創作工具",
+        title: t("aitools"),
         items: [
-          { id: "studio", tool: "writing", icon: "✍️", label: "寫作助手" },
-          { id: "studio", tool: "storybook", icon: "📖", label: "AI 繪本" },
-          { id: "studio", tool: "history", icon: "🏛️", label: "歷史探究" }
+          { id: "studio", tool: "writing", icon: "✍️", label: t("writingassistant") },
+          { id: "studio", tool: "storybook", icon: "📖", label: t("storybook") },
+          { id: "studio", tool: "history", icon: "🏛️", label: t("history") }
         ]
       },
-      { title: "我的空間", items: [{ id: "portfolio", icon: "📚", label: "我的作品" }] }
+      { title: t("myspace"), items: [{ id: "portfolio", icon: "📚", label: t("portfolio") }] }
     ];
   }
   if (state.user.role === "teacher") {
     return [
-      { title: "概覽", items: [{ id: "dashboard", icon: "🏠", label: "教師主頁" }] },
-      { title: "教學管理", items: [{ id: "review", icon: "📝", label: "批改審閱" }, { id: "class", icon: "👥", label: "班級進度" }] }
+      { title: t("overview"), items: [{ id: "dashboard", icon: "🏠", label: t("teacherdashboard") }] },
+      { title: t("teaching"), items: [{ id: "review", icon: "📝", label: t("studentreviews") }, { id: "class", icon: "👥", label: t("classProgress") }] }
     ];
   }
   return [
-    { title: "概覽", items: [{ id: "dashboard", icon: "🏠", label: "管理主頁" }] },
-    { title: "系統管理", items: [{ id: "users", icon: "👤", label: "帳戶權限" }, { id: "ai", icon: "🤖", label: "AI 設定" }, { id: "compliance", icon: "🛡️", label: "合規紀錄" }] }
+    { title: t("overview"), items: [{ id: "dashboard", icon: "🏠", label: t("admindashboard") }] },
+    { title: t("aitools"), items: [{ id: "users", icon: "👤", label: t("usemanagement") }, { id: "ai", icon: "🤖", label: t("aisettings") }, { id: "compliance", icon: "🛡️", label: t("compliance_label") }] }
   ];
 }
 
@@ -267,8 +367,12 @@ function renderApp() {
         <div class="sidebar-bottom">
           <div class="token-bar-label"><span>AI 用量</span><strong>62%</strong></div>
           <div class="token-bar"><div class="token-bar-fill"></div></div>
+          <div style="margin-top:16px;display:flex;gap:6px;font-size:11px">
+            <button class="ghost" id="langEn" style="flex:1;min-height:28px;padding:0;${state.language === "en" ? "background:rgba(91,79,232,0.2);" : ""}" title="English">EN</button>
+            <button class="ghost" id="langZh" style="flex:1;min-height:28px;padding:0;${state.language === "zh" ? "background:rgba(91,79,232,0.2);" : ""}" title="中文">中</button>
+          </div>
         </div>
-        <button class="ghost" id="logout">登出</button>
+        <button class="ghost" id="logout">${t("logout")}</button>
       </aside>
       <main class="main">
         <div class="topbar">
@@ -286,6 +390,16 @@ function renderApp() {
       renderApp();
     });
   });
+  $("#langEn")?.addEventListener("click", () => {
+    state.language = "en";
+    localStorage.setItem("ai-school-language", "en");
+    renderApp();
+  });
+  $("#langZh")?.addEventListener("click", () => {
+    state.language = "zh";
+    localStorage.setItem("ai-school-language", "zh");
+    renderApp();
+  });
   $("#logout").addEventListener("click", () => {
     localStorage.removeItem("ai-school-user");
     state.user = null;
@@ -296,16 +410,17 @@ function renderApp() {
 }
 
 function pageTitle() {
-  return {
-    dashboard: "Dashboard",
-    studio: "AI Learning Studio",
-    portfolio: "Portfolio",
-    review: "Teacher Review",
-    class: "Class Progress",
-    users: "Users & Roles",
-    ai: "AI Settings",
-    compliance: "Compliance & Records"
-  }[state.page];
+  const titles = {
+    dashboard: state.user?.role === "teacher" ? t("teacherdashboard") : state.user?.role === "admin" ? t("admindashboard") : t("dashboard"),
+    studio: t("studio"),
+    portfolio: t("portfolio"),
+    review: t("review"),
+    class: t("class"),
+    users: t("users"),
+    ai: t("ai"),
+    compliance: t("compliance")
+  };
+  return titles[state.page] || "";
 }
 
 function pageSubtitle() {
@@ -516,7 +631,7 @@ function renderChat(chat) {
 }
 
 function renderSavedStoryBook(book) {
-  const pages = book.pageIds.map(pageId => state.data.bookPages.find(page => page.id === pageId)).filter(Boolean);
+  const pages = savedBookPages(book);
   const cover = pages.find(page => page.imageUrl) || pages[0];
   const submitted = book.status === "submitted" || Boolean(book.submittedWorkId);
   return `
@@ -528,7 +643,7 @@ function renderSavedStoryBook(book) {
           ${submitted ? `<span class="chip ok">Submitted</span>` : ""}
         </div>
         <p>${pages.length} pages · ${new Date(book.updatedAt || book.createdAt).toLocaleDateString()}</p>
-        ${book.prompt ? `<p><strong>Prompt:</strong> ${html(book.prompt)}</p>` : ""}
+        ${book.prompt ? `<div class="saved-book-prompt"><strong>Prompt</strong><span>${html(book.prompt)}</span></div>` : ""}
         <p>${html(pages[0]?.text || "")}</p>
         <div class="saved-book-actions">
           <button class="secondary" type="button" data-read-saved-book="${book.id}">Read</button>
@@ -538,18 +653,82 @@ function renderSavedStoryBook(book) {
     </article>`;
 }
 
+function renderSavedBookReader() {
+  const book = (state.data.storyBooks || []).find(item => item.id === state.portfolioBookId);
+  if (!book) return "";
+  const pages = savedBookPages(book);
+  if (!pages.length) return "";
+  const index = Math.min(Math.max(state.portfolioPageIndex, 0), pages.length - 1);
+  const page = pages[index];
+  return `
+    <div class="reader-overlay" data-saved-reader-overlay>
+      <section class="card saved-reader reader-dialog">
+        <div class="section-head">
+          <div>
+            <h3>${html(book.title)}</h3>
+            <p class="muted">Page ${index + 1} / ${pages.length}</p>
+          </div>
+          <button class="ghost" type="button" data-close-saved-reader>Close</button>
+        </div>
+        <article class="saved-reader-page">
+          ${page.imageUrl ? `<img class="saved-reader-image" src="${html(page.imageUrl)}" alt="${html(book.title)} page ${index + 1}">` : `<div class="saved-reader-image placeholder">Image not ready</div>`}
+          <div class="saved-reader-text">
+            <p>${html(page.text)}</p>
+            <div class="saved-reader-actions">
+              <button class="ghost" type="button" data-saved-prev ${index === 0 ? "disabled" : ""}>‹ Previous</button>
+              <button class="secondary" type="button" data-read-saved-page>Read aloud</button>
+              <button class="ghost" type="button" data-saved-next ${index === pages.length - 1 ? "disabled" : ""}>Next ›</button>
+            </div>
+          </div>
+        </article>
+      </section>
+    </div>`;
+}
+
+function renderWorkReader() {
+  const work = state.data.works.find(item => item.id === state.workReaderId);
+  if (!work) return "";
+  const pages = workReaderPages(work);
+  if (!pages.length) return "";
+  const index = Math.min(Math.max(state.workReaderPageIndex, 0), pages.length - 1);
+  const page = pages[index];
+  return `
+    <div class="reader-overlay" data-work-reader-overlay>
+      <section class="card saved-reader reader-dialog">
+        <div class="section-head">
+          <div>
+            <h3>${html(work.title)}</h3>
+            <p class="muted">Page ${index + 1} / ${pages.length}</p>
+          </div>
+          <button class="ghost" type="button" data-close-work-reader>Close</button>
+        </div>
+        <article class="saved-reader-page">
+          ${page.imageUrl ? `<img class="saved-reader-image" src="${html(page.imageUrl)}" alt="${html(work.title)} page ${index + 1}">` : `<div class="saved-reader-image placeholder">Writing</div>`}
+          <div class="saved-reader-text">
+            <p>${html(page.text)}</p>
+            <div class="saved-reader-actions">
+              <button class="ghost" type="button" data-work-prev ${index === 0 ? "disabled" : ""}>‹ Previous</button>
+              <button class="secondary" type="button" data-read-work-page>Read aloud</button>
+              <button class="ghost" type="button" data-work-next ${index === pages.length - 1 ? "disabled" : ""}>Next ›</button>
+            </div>
+          </div>
+        </article>
+      </section>
+    </div>`;
+}
+
 function renderPortfolio() {
   const works = state.data.works.filter(work => work.studentId === state.user.id);
   const storyBooks = (state.data.storyBooks || []).filter(book => book.studentId === state.user.id);
-  return `<section class="grid two"><div class="card"><h3>Submitted Work</h3><div class="list" style="margin-top:14px">${works.map(renderWork).join("") || `<div class="empty">No writing submitted yet.</div>`}</div></div><div class="card"><h3>Saved Storybooks</h3><div class="saved-book-list" style="margin-top:14px">${storyBooks.map(renderSavedStoryBook).join("") || `<div class="empty">No storybooks saved yet.</div>`}</div></div></section>`;
+  return `${renderWorkReader()}${renderSavedBookReader()}<section class="grid two"><div class="card"><h3>Submitted Work</h3><div class="list" style="margin-top:14px">${works.map(renderWork).join("") || `<div class="empty">No writing submitted yet.</div>`}</div></div><div class="card"><h3>Saved Storybooks</h3><div class="saved-book-list" style="margin-top:14px">${storyBooks.map(renderSavedStoryBook).join("") || `<div class="empty">No storybooks saved yet.</div>`}</div></div></section>`;
 }
 
 function renderWork(work) {
-  return `<article class="item"><div class="section-head"><h4>${work.title}</h4>${statusChip(work.status)}</div><p>${work.content}</p><div class="chips"><span class="chip">Score ${work.score || "-"}</span><span class="chip">${new Date(work.updatedAt).toLocaleDateString()}</span></div><p style="margin-top:8px">${work.teacherComment || work.feedback || ""}</p></article>`;
+  return `<article class="item"><div class="section-head"><h4>${work.title}</h4>${statusChip(work.status)}</div><p>${work.content}</p><div class="toolbar" style="margin-top:10px"><button class="secondary" type="button" data-read-work="${work.id}">閱讀</button><span class="chip">Score ${work.score || "-"}</span><span class="chip">${new Date(work.updatedAt).toLocaleDateString()}</span></div><p style="margin-top:8px">${work.teacherComment || work.feedback || ""}</p></article>`;
 }
 
 function renderReview() {
-  return `<section class="card"><div class="section-head"><h3>Student Submissions</h3><span class="chip warn">${state.data.summary.pendingReview} pending</span></div><div class="list">${state.data.works.map(work => `<article class="item"><div class="section-head"><h4>${work.title}</h4>${statusChip(work.status)}</div><p>${work.content}</p><p>${work.feedback || ""}</p><div class="toolbar" style="margin-top:10px"><input data-score="${work.id}" type="number" min="0" max="100" value="${work.score || 75}" style="max-width:120px"><input data-comment="${work.id}" value="${work.teacherComment || "Good progress. Add more evidence and details."}"><button class="primary" data-review="${work.id}">Approve</button></div></article>`).join("")}</div></section>`;
+  return `<section class="card"><div class="section-head"><h3>Student Submissions</h3><span class="chip warn">${state.data.summary.pendingReview} pending</span></div><div class="list">${state.data.works.map(work => `<article class="item"><div class="section-head"><h4>${work.title}</h4>${statusChip(work.status)}</div><p>${work.content}</p><p>${work.feedback || ""}</p><div class="toolbar" style="margin-top:10px"><button class="secondary" type="button" data-read-work="${work.id}">閱讀</button><input data-score="${work.id}" type="number" min="0" max="100" value="${work.score || 75}" style="max-width:120px"><input data-comment="${work.id}" value="${work.teacherComment || "Good progress. Add more evidence and details."}"><button class="primary" data-review="${work.id}">Approve</button></div></article>`).join("")}</div></section>`;
 }
 
 function renderClass() {
@@ -650,15 +829,46 @@ function bindView() {
 
   document.querySelectorAll("[data-read-saved-book]").forEach(button => {
     button.addEventListener("click", () => {
-      const book = (state.data.storyBooks || []).find(item => item.id === button.dataset.readSavedBook);
-      if (!book) return;
-      const text = book.pageIds
-        .map(pageId => state.data.bookPages.find(page => page.id === pageId))
-        .filter(Boolean)
-        .map(page => page.text)
-        .join("\n");
-      readStoryText(text);
+      state.portfolioBookId = button.dataset.readSavedBook;
+      state.portfolioPageIndex = 0;
+      renderApp();
     });
+  });
+
+  $("[data-close-saved-reader]")?.addEventListener("click", () => {
+    stopStoryText();
+    state.portfolioBookId = "";
+    state.portfolioPageIndex = 0;
+    renderApp();
+  });
+
+  document.querySelectorAll("[data-saved-reader-overlay]").forEach(overlay => {
+    overlay.addEventListener("click", event => {
+      if (event.target !== overlay) return;
+      stopStoryText();
+      state.portfolioBookId = "";
+      state.portfolioPageIndex = 0;
+      renderApp();
+    });
+  });
+
+  $("[data-saved-prev]")?.addEventListener("click", () => {
+    state.portfolioPageIndex = Math.max(0, state.portfolioPageIndex - 1);
+    renderApp();
+  });
+
+  $("[data-saved-next]")?.addEventListener("click", () => {
+    const book = (state.data.storyBooks || []).find(item => item.id === state.portfolioBookId);
+    const pages = savedBookPages(book);
+    state.portfolioPageIndex = Math.min(pages.length - 1, state.portfolioPageIndex + 1);
+    renderApp();
+  });
+
+  $("[data-read-saved-page]")?.addEventListener("click", () => {
+    const book = (state.data.storyBooks || []).find(item => item.id === state.portfolioBookId);
+    const pages = savedBookPages(book);
+    const page = pages[Math.min(Math.max(state.portfolioPageIndex, 0), pages.length - 1)];
+    readStoryText(page?.text || "");
   });
 
   document.querySelectorAll("[data-submit-saved-book]").forEach(button => {
@@ -841,6 +1051,50 @@ async function generateStoryImages(pages) {
       await refresh();
       renderApp();
     });
+  });
+
+  document.querySelectorAll("[data-read-work]").forEach(button => {
+    button.addEventListener("click", () => {
+      state.workReaderId = button.dataset.readWork;
+      state.workReaderPageIndex = 0;
+      renderApp();
+    });
+  });
+
+  $("[data-close-work-reader]")?.addEventListener("click", () => {
+    stopStoryText();
+    state.workReaderId = "";
+    state.workReaderPageIndex = 0;
+    renderApp();
+  });
+
+  document.querySelectorAll("[data-work-reader-overlay]").forEach(overlay => {
+    overlay.addEventListener("click", event => {
+      if (event.target !== overlay) return;
+      stopStoryText();
+      state.workReaderId = "";
+      state.workReaderPageIndex = 0;
+      renderApp();
+    });
+  });
+
+  $("[data-work-prev]")?.addEventListener("click", () => {
+    state.workReaderPageIndex = Math.max(0, state.workReaderPageIndex - 1);
+    renderApp();
+  });
+
+  $("[data-work-next]")?.addEventListener("click", () => {
+    const work = state.data.works.find(item => item.id === state.workReaderId);
+    const pages = workReaderPages(work);
+    state.workReaderPageIndex = Math.min(pages.length - 1, state.workReaderPageIndex + 1);
+    renderApp();
+  });
+
+  $("[data-read-work-page]")?.addEventListener("click", () => {
+    const work = state.data.works.find(item => item.id === state.workReaderId);
+    const pages = workReaderPages(work);
+    const page = pages[Math.min(Math.max(state.workReaderPageIndex, 0), pages.length - 1)];
+    readStoryText(page?.text || "");
   });
 
   $("#userForm")?.addEventListener("submit", async event => {
