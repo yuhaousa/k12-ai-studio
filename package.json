@@ -1,0 +1,17 @@
+{
+  "name": "school-ai-learning-platform",
+  "version": "1.0.0",
+  "description": "Full-stack MVP for an AI Chinese and humanities learning platform based on the customer tender requirements.",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node server.js"
+  },
+  "keywords": [
+    "education",
+    "ai",
+    "writing",
+    "chinese-learning"
+  ],
+  "license": "UNLICENSED"
+}

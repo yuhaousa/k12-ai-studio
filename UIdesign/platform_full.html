@@ -1,0 +1,900 @@
+<!DOCTYPE html>
+<html lang="zh-HK">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AI學習平台 — 完整原型</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box;}
+:root{
+  --primary:#5B4FE8;--primary-d:#3D35B5;--primary-l:#7B6FF0;
+  --accent:#FF6B6B;--accent2:#FFD93D;--accent3:#6BCB77;--accent4:#4FC3F7;
+  --bg:#F4F5FA;--card:#FFFFFF;--text:#1A1A2E;--muted:#6B7280;
+  --sw:240px;
+}
+body{font-family:'Segoe UI','Microsoft JhengHei',sans-serif;background:var(--bg);color:var(--text);}
+
+/* ── Role Switcher Bar ── */
+.role-bar{
+  position:fixed;top:0;left:0;right:0;height:44px;z-index:200;
+  background:#1A1A2E;display:flex;align-items:center;justify-content:center;gap:6px;
+}
+.role-bar span{color:rgba(255,255,255,0.4);font-size:12px;margin-right:6px;}
+.role-btn{
+  padding:5px 16px;border-radius:20px;font-size:12px;font-weight:700;border:none;cursor:pointer;
+  background:rgba(255,255,255,0.1);color:rgba(255,255,255,0.6);transition:all .15s;
+}
+.role-btn.active{background:var(--primary);color:#fff;}
+.role-btn:hover:not(.active){background:rgba(255,255,255,0.18);color:#fff;}
+
+/* ── Layout ── */
+.portal{display:none;padding-top:44px;min-height:100vh;}
+.portal.active{display:flex;}
+
+/* ── Sidebar ── */
+.sidebar{
+  width:var(--sw);min-height:calc(100vh - 44px);
+  background:linear-gradient(180deg,#1A1A2E 0%,#2D2B6B 100%);
+  display:flex;flex-direction:column;position:fixed;top:44px;left:0;z-index:100;
+}
+.sb-logo{padding:20px 16px;display:flex;align-items:center;gap:10px;border-bottom:1px solid rgba(255,255,255,.08);}
+.sb-logo-icon{width:38px;height:38px;border-radius:11px;display:flex;align-items:center;justify-content:center;font-size:18px;flex-shrink:0;}
+.sb-logo-text{color:#fff;font-size:13px;font-weight:700;line-height:1.3;}
+.sb-logo-sub{color:rgba(255,255,255,.4);font-size:10px;}
+.sb-user{padding:14px 16px;display:flex;align-items:center;gap:9px;border-bottom:1px solid rgba(255,255,255,.08);margin-bottom:6px;}
+.avatar{width:34px;height:34px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-weight:700;color:#fff;font-size:13px;flex-shrink:0;}
+.nav{padding:4px 0;flex:1;}
+.nav-sec{padding:10px 16px 3px;color:rgba(255,255,255,.3);font-size:9px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;}
+.nav-item{display:flex;align-items:center;gap:9px;padding:9px 16px;cursor:pointer;color:rgba(255,255,255,.6);font-size:12px;transition:all .15s;margin:1px 6px;border-radius:7px;}
+.nav-item:hover{background:rgba(255,255,255,.07);color:rgba(255,255,255,.9);}
+.nav-item.active{background:rgba(91,79,232,.5);color:#fff;}
+.nav-icon{font-size:15px;width:18px;text-align:center;flex-shrink:0;}
+.nav-badge{margin-left:auto;background:var(--accent);color:#fff;font-size:9px;font-weight:700;padding:2px 6px;border-radius:10px;}
+.sb-bottom{padding:14px 16px;border-top:1px solid rgba(255,255,255,.08);}
+
+/* ── Main ── */
+.main{margin-left:var(--sw);flex:1;min-height:calc(100vh - 44px);}
+.topbar{height:58px;background:#fff;border-bottom:1px solid #E5E7EB;display:flex;align-items:center;padding:0 24px;gap:12px;position:sticky;top:44px;z-index:50;}
+.topbar-title{font-size:16px;font-weight:700;flex:1;}
+.topbar-sub{font-size:11px;color:var(--muted);font-weight:400;margin-left:6px;}
+.content{padding:24px;}
+.screen{display:none;}
+.screen.active{display:block;}
+
+/* ── Reusable ── */
+.btn{padding:7px 14px;border-radius:7px;font-size:12px;font-weight:600;cursor:pointer;border:none;transition:all .15s;}
+.btn-primary{background:var(--primary);color:#fff;}
+.btn-primary:hover{background:var(--primary-d);}
+.btn-ghost{background:transparent;color:var(--muted);border:1px solid #E5E7EB;}
+.btn-ghost:hover{background:var(--bg);}
+.btn-sm{padding:5px 10px;font-size:11px;}
+.card{background:#fff;border-radius:14px;padding:20px;box-shadow:0 1px 4px rgba(0,0,0,.06);}
+.tag{display:inline-block;padding:2px 8px;border-radius:20px;font-size:10px;font-weight:700;}
+.grid-2{display:grid;grid-template-columns:1fr 1fr;gap:18px;margin-bottom:20px;}
+.grid-3{display:grid;grid-template-columns:repeat(3,1fr);gap:16px;margin-bottom:20px;}
+.grid-4{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:20px;}
+.sec-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;}
+.sec-title{font-size:14px;font-weight:700;}
+.see-all{font-size:12px;color:var(--primary);cursor:pointer;font-weight:600;}
+.divider{height:1px;background:#E5E7EB;margin:16px 0;}
+.stat-card{background:#fff;border-radius:12px;padding:16px;box-shadow:0 1px 4px rgba(0,0,0,.06);}
+.stat-val{font-size:26px;font-weight:800;margin-bottom:1px;}
+.stat-lbl{font-size:11px;color:var(--muted);}
+.stat-chg{font-size:10px;font-weight:600;margin-top:3px;color:var(--accent3);}
+.pb{height:6px;background:#F3F4F6;border-radius:3px;overflow:hidden;}
+.pb-fill{height:100%;border-radius:3px;}
+.hint{font-size:11px;color:var(--muted);margin-top:5px;}
+
+/* color helpers */
+.cp{background:rgba(91,79,232,.1);color:var(--primary);}
+.cr{background:rgba(255,107,107,.1);color:#DC2626;}
+.cy{background:rgba(255,217,61,.15);color:#B45309;}
+.cg{background:rgba(107,203,119,.15);color:#15803D;}
+.cb{background:rgba(79,195,247,.15);color:#0369A1;}
+.bgp{background:rgba(91,79,232,.08);}
+.bgr{background:rgba(255,107,107,.08);}
+.bgy{background:rgba(255,217,61,.1);}
+.bgg{background:rgba(107,203,119,.1);}
+.bgb{background:rgba(79,195,247,.1);}
+
+/* ── Welcome banner ── */
+.banner{border-radius:16px;padding:24px 28px;color:#fff;position:relative;overflow:hidden;margin-bottom:20px;}
+.banner::after{content:'';position:absolute;right:-20px;top:-40px;width:180px;height:180px;background:rgba(255,255,255,.07);border-radius:50%;}
+.banner h2{font-size:20px;font-weight:700;margin-bottom:5px;}
+.banner p{font-size:13px;opacity:.85;margin-bottom:14px;}
+.chips{display:flex;gap:7px;flex-wrap:wrap;}
+.chip{background:rgba(255,255,255,.18);border-radius:20px;padding:4px 10px;font-size:11px;font-weight:600;}
+
+/* ── Table ── */
+.tbl{width:100%;border-collapse:collapse;font-size:12px;}
+.tbl th{text-align:left;padding:9px 12px;background:#F9FAFB;color:var(--muted);font-weight:600;border-bottom:1px solid #E5E7EB;}
+.tbl td{padding:9px 12px;border-bottom:1px solid #F3F4F6;vertical-align:middle;}
+.tbl tr:last-child td{border-bottom:none;}
+.tbl tr:hover td{background:#FAFAFA;}
+
+/* ── Student row progress ── */
+.row-pb{width:80px;height:5px;background:#F3F4F6;border-radius:3px;overflow:hidden;display:inline-block;vertical-align:middle;}
+.row-pb-fill{height:100%;border-radius:3px;}
+
+/* ── Alert item ── */
+.alert-item{display:flex;align-items:center;gap:10px;padding:10px;border-radius:9px;background:var(--bg);}
+.alert-dot{width:7px;height:7px;border-radius:50%;flex-shrink:0;}
+
+/* ── Timeline ── */
+.timeline{display:flex;flex-direction:column;gap:0;}
+.tl-item{display:flex;gap:12px;padding-bottom:16px;position:relative;}
+.tl-item:not(:last-child)::before{content:'';position:absolute;left:14px;top:28px;bottom:0;width:2px;background:#E5E7EB;}
+.tl-dot{width:28px;height:28px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:13px;flex-shrink:0;z-index:1;}
+.tl-body{flex:1;padding-top:4px;}
+.tl-title{font-size:13px;font-weight:700;margin-bottom:2px;}
+.tl-sub{font-size:11px;color:var(--muted);}
+
+/* ── Chart mock ── */
+.bar-chart{display:flex;align-items:flex-end;gap:6px;height:80px;padding:0 4px;}
+.bar-col{display:flex;flex-direction:column;align-items:center;gap:4px;flex:1;}
+.bar{width:100%;border-radius:4px 4px 0 0;transition:height .3s;}
+.bar-lbl{font-size:9px;color:var(--muted);text-align:center;}
+
+/* ── Donut mock ── */
+.donut-wrap{display:flex;align-items:center;gap:20px;}
+.donut{width:80px;height:80px;border-radius:50%;background:conic-gradient(var(--primary) 0% 62%,var(--accent4) 62% 78%,var(--accent3) 78% 92%,#E5E7EB 92% 100%);display:flex;align-items:center;justify-content:center;position:relative;flex-shrink:0;}
+.donut::after{content:'';position:absolute;width:52px;height:52px;background:#fff;border-radius:50%;}
+.donut-legend{display:flex;flex-direction:column;gap:5px;}
+.dl-item{display:flex;align-items:center;gap:6px;font-size:11px;}
+.dl-dot{width:8px;height:8px;border-radius:2px;flex-shrink:0;}
+
+/* ── Token usage bar ── */
+.usage-bar-wrap{background:#F9FAFB;border-radius:10px;padding:12px;}
+.usage-row{display:flex;align-items:center;gap:10px;margin-bottom:8px;}
+.usage-label{font-size:11px;font-weight:600;width:60px;flex-shrink:0;}
+.usage-bar{flex:1;height:6px;background:#E5E7EB;border-radius:3px;overflow:hidden;}
+.usage-fill{height:100%;border-radius:3px;}
+.usage-val{font-size:11px;color:var(--muted);width:50px;text-align:right;}
+
+/* ── Module toggle ── */
+.module-row{display:flex;align-items:center;padding:12px 0;border-bottom:1px solid #F3F4F6;}
+.module-row:last-child{border-bottom:none;}
+.toggle{width:36px;height:20px;border-radius:10px;position:relative;cursor:pointer;flex-shrink:0;transition:background .2s;}
+.toggle.on{background:var(--accent3);}
+.toggle.off{background:#D1D5DB;}
+.toggle::after{content:'';position:absolute;width:16px;height:16px;background:#fff;border-radius:50%;top:2px;transition:left .2s;box-shadow:0 1px 3px rgba(0,0,0,.2);}
+.toggle.on::after{left:18px;}
+.toggle.off::after{left:2px;}
+
+/* ── Form elements ── */
+.form-row{display:flex;flex-direction:column;gap:4px;margin-bottom:12px;}
+.form-label{font-size:11px;font-weight:600;color:var(--muted);}
+.form-input{border:1px solid #E5E7EB;border-radius:7px;padding:8px 10px;font-size:12px;font-family:inherit;outline:none;}
+.form-input:focus{border-color:var(--primary);}
+select.form-input{cursor:pointer;}
+textarea.form-input{resize:vertical;min-height:80px;}
+
+/* ── Assessment rubric ── */
+.rubric-row{display:grid;grid-template-columns:120px repeat(4,1fr);gap:1px;background:#E5E7EB;border-radius:4px;overflow:hidden;margin-bottom:1px;}
+.rubric-cell{background:#fff;padding:8px 10px;font-size:11px;}
+.rubric-cell.header{background:#F9FAFB;font-weight:700;color:var(--muted);}
+.rubric-cell.label{font-weight:600;background:#FAFAFA;}
+.score-btn{width:28px;height:28px;border-radius:50%;border:2px solid #E5E7EB;background:#fff;cursor:pointer;font-size:12px;font-weight:700;transition:all .15s;}
+.score-btn.sel{border-color:var(--primary);background:var(--primary);color:#fff;}
+</style>
+</head>
+<body>
+
+<!-- ══ ROLE SWITCHER ══ -->
+<div class="role-bar">
+  <span>🔄 切換角色：</span>
+  <button class="role-btn" onclick="setRole('student')">👧 學生</button>
+  <button class="role-btn active" onclick="setRole('teacher')">👩‍🏫 教師</button>
+  <button class="role-btn" onclick="setRole('school')">🏫 學校管理員</button>
+</div>
+
+<!-- ══════════════════════════════════════
+     STUDENT PORTAL (link to existing)
+══════════════════════════════════════ -->
+<div class="portal" id="portal-student">
+  <div style="margin-left:var(--sw);flex:1;display:flex;align-items:center;justify-content:center;flex-direction:column;gap:16px;color:var(--muted);">
+    <div style="font-size:48px">👧</div>
+    <div style="font-size:18px;font-weight:700;color:var(--text)">學生版原型</div>
+    <p style="font-size:13px;text-align:center">請開啟 <strong>platform_prototype.html</strong><br>查看完整學生介面</p>
+    <a href="platform_prototype.html" target="_blank" class="btn btn-primary" style="text-decoration:none">開啟學生版 →</a>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════
+     TEACHER PORTAL
+══════════════════════════════════════ -->
+<div class="portal active" id="portal-teacher">
+  <!-- Sidebar -->
+  <aside class="sidebar" id="t-sidebar">
+    <div class="sb-logo">
+      <div class="sb-logo-icon" style="background:linear-gradient(135deg,#4FC3F7,#5B4FE8)">🤖</div>
+      <div><div class="sb-logo-text">AI學習平台</div><div class="sb-logo-sub">教師版</div></div>
+    </div>
+    <div class="sb-user">
+      <div class="avatar" style="background:linear-gradient(135deg,#4FC3F7,#5B4FE8)">黃</div>
+      <div><div style="color:#fff;font-size:12px;font-weight:600">黃老師</div><div style="color:rgba(255,255,255,.4);font-size:10px">小四甲班 班主任</div></div>
+    </div>
+    <nav class="nav">
+      <div class="nav-sec">概覽</div>
+      <div class="nav-item active" onclick="tShow('t-dashboard')"><span class="nav-icon">🏠</span>教師主頁</div>
+      <div class="nav-item" onclick="tShow('t-class')"><span class="nav-icon">👥</span>班級管理<span class="nav-badge">2</span></div>
+      <div class="nav-sec">教學</div>
+      <div class="nav-item" onclick="tShow('t-planner')"><span class="nav-icon">📅</span>課程計劃</div>
+      <div class="nav-item" onclick="tShow('t-assign')"><span class="nav-icon">📋</span>任務發佈</div>
+      <div class="nav-sec">評估</div>
+      <div class="nav-item" onclick="tShow('t-assess')"><span class="nav-icon">📊</span>學生評估</div>
+      <div class="nav-item" onclick="tShow('t-report')"><span class="nav-icon">📄</span>AI 報告生成</div>
+    </nav>
+    <div class="sb-bottom">
+      <div style="display:flex;justify-content:space-between;margin-bottom:5px">
+        <span style="font-size:10px;color:rgba(255,255,255,.4)">🪙 班級 Token</span>
+        <strong style="font-size:10px;color:rgba(255,255,255,.7)">6,820 / 10,000</strong>
+      </div>
+      <div style="height:5px;background:rgba(255,255,255,.1);border-radius:3px;overflow:hidden">
+        <div style="height:100%;width:68%;background:linear-gradient(90deg,var(--accent4),var(--primary-l));border-radius:3px"></div>
+      </div>
+    </div>
+  </aside>
+
+  <main class="main">
+    <!-- Topbar -->
+    <div class="topbar">
+      <div class="topbar-title" id="t-topbar-title">教師主頁 <span class="topbar-sub">2026年6月18日 · 週四</span></div>
+      <div style="display:flex;gap:8px">
+        <button class="btn btn-ghost btn-sm">🔔 通知</button>
+        <button class="btn btn-primary btn-sm" onclick="tShow('t-assign')">＋ 發佈任務</button>
+      </div>
+    </div>
+
+    <!-- T-DASHBOARD -->
+    <div class="content screen active" id="t-dashboard">
+      <div class="banner" style="background:linear-gradient(135deg,#2563EB,#7C3AED)">
+        <h2>👩‍🏫 下午好，黃老師！</h2>
+        <p>今天有 2 位學生需要關注，AI 語音模組任務截止日期為明天。</p>
+        <div class="chips">
+          <span class="chip">📚 小四甲班 · 28 人</span>
+          <span class="chip">⚠️ 2 位需關注</span>
+          <span class="chip">✅ 今日課堂已完成</span>
+        </div>
+      </div>
+
+      <div class="grid-4">
+        <div class="stat-card"><div class="stat-val" style="color:var(--primary)">28</div><div class="stat-lbl">班級人數</div><div class="stat-chg">今日全員出席</div></div>
+        <div class="stat-card"><div class="stat-val" style="color:var(--accent3)">73%</div><div class="stat-lbl">平均完成率</div><div class="stat-chg">↑ +8% 本週</div></div>
+        <div class="stat-card"><div class="stat-val" style="color:var(--accent)">2</div><div class="stat-lbl">需要關注</div><div class="stat-chg" style="color:var(--accent)">進度落後</div></div>
+        <div class="stat-card"><div class="stat-val" style="color:var(--accent4)">5</div><div class="stat-lbl">待批改任務</div><div class="stat-chg">截止：明天</div></div>
+      </div>
+
+      <div class="grid-2">
+        <div class="card">
+          <div class="sec-header"><div class="sec-title">⚠️ 需要關注的學生</div><div class="see-all" onclick="tShow('t-class')">查看全班</div></div>
+          <div style="display:flex;flex-direction:column;gap:8px">
+            <div class="alert-item">
+              <div class="alert-dot" style="background:var(--accent)"></div>
+              <div style="flex:1;cursor:pointer" onclick="openAssess('李大文')"><div style="font-size:12px;font-weight:600">李大文 <span style="color:var(--primary);font-size:10px">→ 查看評估</span></div><div style="font-size:11px;color:var(--muted)">連續3天未完成任務 · AI 圖像進度 20%</div></div>
+              <button class="btn btn-ghost btn-sm" onclick="openAssess('李大文')">評估</button>
+            </div>
+            <div class="alert-item">
+              <div class="alert-dot" style="background:var(--accent2)"></div>
+              <div style="flex:1;cursor:pointer" onclick="openAssess('張美玲')"><div style="font-size:12px;font-weight:600">張美玲 <span style="color:var(--primary);font-size:10px">→ 查看評估</span></div><div style="font-size:11px;color:var(--muted)">語音模組進度 10% · 需要輔導</div></div>
+              <button class="btn btn-ghost btn-sm" onclick="openAssess('張美玲')">評估</button>
+            </div>
+          </div>
+          <div class="divider"></div>
+          <div class="sec-header"><div class="sec-title">🌟 本週優秀學生</div></div>
+          <div style="display:flex;gap:10px">
+            <div class="alert-item" style="flex:1"><span style="font-size:18px">🥇</span><div><div style="font-size:12px;font-weight:600">陳小明</div><div style="font-size:10px;color:var(--muted)">87分 · 5件作品</div></div></div>
+            <div class="alert-item" style="flex:1"><span style="font-size:18px">🥈</span><div><div style="font-size:12px;font-weight:600">王小雯</div><div style="font-size:10px;color:var(--muted)">84分 · 4件作品</div></div></div>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="sec-header"><div class="sec-title">📈 班級模組進度</div></div>
+          <div style="display:flex;flex-direction:column;gap:10px">
+            <div><div style="display:flex;justify-content:space-between;margin-bottom:4px"><span style="font-size:12px;font-weight:600">🎨 AI 圖像生成</span><span style="font-size:12px;font-weight:700;color:var(--primary)">68%</span></div><div class="pb"><div class="pb-fill" style="width:68%;background:var(--primary)"></div></div></div>
+            <div><div style="display:flex;justify-content:space-between;margin-bottom:4px"><span style="font-size:12px;font-weight:600">🎙️ AI 語音工作室</span><span style="font-size:12px;font-weight:700;color:var(--accent)">41%</span></div><div class="pb"><div class="pb-fill" style="width:41%;background:var(--accent)"></div></div></div>
+            <div><div style="display:flex;justify-content:space-between;margin-bottom:4px"><span style="font-size:12px;font-weight:600">📖 電子書製作</span><span style="font-size:12px;font-weight:700;color:var(--accent2)">53%</span></div><div class="pb"><div class="pb-fill" style="width:53%;background:var(--accent2)"></div></div></div>
+            <div><div style="display:flex;justify-content:space-between;margin-bottom:4px"><span style="font-size:12px;font-weight:600">🧠 AI 知識理解</span><span style="font-size:12px;font-weight:700;color:var(--accent3)">72%</span></div><div class="pb"><div class="pb-fill" style="width:72%;background:var(--accent3)"></div></div></div>
+          </div>
+          <div class="divider"></div>
+          <div class="sec-header"><div class="sec-title">📅 本週課堂</div></div>
+          <div class="timeline">
+            <div class="tl-item"><div class="tl-dot bgg">✅</div><div class="tl-body"><div class="tl-title">AI Prompt 工程入門</div><div class="tl-sub">週二 · 已完成 · 25/28 出席</div></div></div>
+            <div class="tl-item"><div class="tl-dot bgb">▶</div><div class="tl-body"><div class="tl-title">AI 語音配音工作坊</div><div class="tl-sub">週五 · 明天 · 準備中</div></div></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- T-CLASS -->
+    <div class="content screen" id="t-class">
+      <div class="sec-header" style="margin-bottom:16px">
+        <div class="sec-title" style="font-size:16px">👥 班級管理 — 小四甲班</div>
+        <div style="display:flex;gap:8px">
+          <select class="form-input" style="width:auto;font-size:11px"><option>全部學生</option><option>需要關注</option><option>優秀學生</option></select>
+          <button class="btn btn-primary btn-sm">📊 匯出報告</button>
+        </div>
+      </div>
+      <div class="card">
+        <table class="tbl">
+          <thead><tr><th>學生</th><th>圖像</th><th>語音</th><th>電子書</th><th>AI知識</th><th>整體</th><th>作品數</th><th>狀態</th><th></th></tr></thead>
+          <tbody>
+            <tr class="student-row" onclick="openAssess('陳小明')" style="cursor:pointer"><td><strong>陳小明</strong></td><td><div class="row-pb"><div class="row-pb-fill" style="width:75%;background:var(--primary)"></div></div> 75%</td><td><div class="row-pb"><div class="row-pb-fill" style="width:40%;background:var(--accent)"></div></div> 40%</td><td><div class="row-pb"><div class="row-pb-fill" style="width:55%;background:var(--accent2)"></div></div> 55%</td><td><div class="row-pb"><div class="row-pb-fill" style="width:60%;background:var(--accent4)"></div></div> 60%</td><td><strong style="color:var(--primary)">87</strong></td><td>14</td><td><span class="tag cg">良好</span></td><td><button class="btn btn-primary btn-sm" onclick="event.stopPropagation();openAssess('陳小明')">評估 →</button></td></tr>
+            <tr class="student-row" onclick="openAssess('王小雯')" style="cursor:pointer"><td><strong>王小雯</strong></td><td><div class="row-pb"><div class="row-pb-fill" style="width:80%;background:var(--primary)"></div></div> 80%</td><td><div class="row-pb"><div class="row-pb-fill" style="width:65%;background:var(--accent)"></div></div> 65%</td><td><div class="row-pb"><div class="row-pb-fill" style="width:70%;background:var(--accent2)"></div></div> 70%</td><td><div class="row-pb"><div class="row-pb-fill" style="width:75%;background:var(--accent4)"></div></div> 75%</td><td><strong style="color:var(--primary)">84</strong></td><td>12</td><td><span class="tag cg">良好</span></td><td><button class="btn btn-primary btn-sm" onclick="event.stopPropagation();openAssess('王小雯')">評估 →</button></td></tr>
+            <tr class="student-row" onclick="openAssess('李大文')" style="cursor:pointer"><td><strong>李大文</strong></td><td><div class="row-pb"><div class="row-pb-fill" style="width:20%;background:var(--accent)"></div></div> 20%</td><td><div class="row-pb"><div class="row-pb-fill" style="width:15%;background:var(--accent)"></div></div> 15%</td><td><div class="row-pb"><div class="row-pb-fill" style="width:10%;background:var(--accent)"></div></div> 10%</td><td><div class="row-pb"><div class="row-pb-fill" style="width:30%;background:var(--accent)"></div></div> 30%</td><td><strong style="color:var(--accent)">42</strong></td><td>2</td><td><span class="tag cr">需關注</span></td><td><button class="btn btn-primary btn-sm" onclick="event.stopPropagation();openAssess('李大文')">評估 →</button></td></tr>
+            <tr class="student-row" onclick="openAssess('張美玲')" style="cursor:pointer"><td><strong>張美玲</strong></td><td><div class="row-pb"><div class="row-pb-fill" style="width:60%;background:var(--primary)"></div></div> 60%</td><td><div class="row-pb"><div class="row-pb-fill" style="width:10%;background:var(--accent)"></div></div> 10%</td><td><div class="row-pb"><div class="row-pb-fill" style="width:45%;background:var(--accent2)"></div></div> 45%</td><td><div class="row-pb"><div class="row-pb-fill" style="width:55%;background:var(--accent4)"></div></div> 55%</td><td><strong style="color:var(--accent2)">62</strong></td><td>7</td><td><span class="tag cy">待改善</span></td><td><button class="btn btn-primary btn-sm" onclick="event.stopPropagation();openAssess('張美玲')">評估 →</button></td></tr>
+            <tr class="student-row" onclick="openAssess('林志豪')" style="cursor:pointer"><td><strong>林志豪</strong></td><td><div class="row-pb"><div class="row-pb-fill" style="width:90%;background:var(--accent3)"></div></div> 90%</td><td><div class="row-pb"><div class="row-pb-fill" style="width:85%;background:var(--accent3)"></div></div> 85%</td><td><div class="row-pb"><div class="row-pb-fill" style="width:80%;background:var(--accent3)"></div></div> 80%</td><td><div class="row-pb"><div class="row-pb-fill" style="width:95%;background:var(--accent3)"></div></div> 95%</td><td><strong style="color:var(--accent3)">92</strong></td><td>18</td><td><span class="tag cg">優秀</span></td><td><button class="btn btn-primary btn-sm" onclick="event.stopPropagation();openAssess('林志豪')">評估 →</button></td></tr>
+            <tr><td colspan="9" style="color:var(--muted);font-style:italic;text-align:center;padding:12px">… 另外 23 位學生</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- T-PLANNER -->
+    <div class="content screen" id="t-planner">
+      <div class="sec-header" style="margin-bottom:16px">
+        <div class="sec-title" style="font-size:16px">📅 課程計劃 (Co-planning)</div>
+        <button class="btn btn-primary btn-sm">＋ 新增課節</button>
+      </div>
+      <div class="grid-2">
+        <div class="card">
+          <div class="sec-title" style="margin-bottom:14px">📆 本月課堂安排</div>
+          <div class="timeline">
+            <div class="tl-item"><div class="tl-dot bgg" style="font-size:11px">✅</div><div class="tl-body"><div class="tl-title">課節1：甚麼是 AI？</div><div class="tl-sub">6月10日 · 已完成 · P4A 全班</div></div></div>
+            <div class="tl-item"><div class="tl-dot bgg" style="font-size:11px">✅</div><div class="tl-body"><div class="tl-title">課節2：Prompt 工程入門</div><div class="tl-sub">6月17日 · 已完成</div></div></div>
+            <div class="tl-item"><div class="tl-dot bgb" style="font-size:11px">▶</div><div class="tl-body"><div class="tl-title">課節3：AI 語音配音工作坊</div><div class="tl-sub">6月19日（明天）· 準備中</div><button class="btn btn-primary btn-sm" style="margin-top:6px">查看課節資料</button></div></div>
+            <div class="tl-item"><div class="tl-dot bgp" style="font-size:11px">📋</div><div class="tl-body"><div class="tl-title">課節4：AI 電子書創作</div><div class="tl-sub">6月24日 · 計劃中</div></div></div>
+            <div class="tl-item" style="padding-bottom:0"><div class="tl-dot bgy" style="font-size:11px">🔒</div><div class="tl-body"><div class="tl-title">課節5：AI 創作倫理</div><div class="tl-sub">7月1日 · 待安排</div></div></div>
+          </div>
+        </div>
+        <div class="card">
+          <div class="sec-title" style="margin-bottom:14px">🤖 AI 備課助手</div>
+          <div class="form-row"><div class="form-label">課節主題</div><input class="form-input" value="AI 語音配音工作坊"></div>
+          <div class="form-row"><div class="form-label">目標年級</div><select class="form-input"><option>小四甲班 (P4A)</option><option>小四乙班 (P4B)</option></select></div>
+          <div class="form-row"><div class="form-label">學習目標</div><textarea class="form-input">學生能夠使用 TTS 工具為故事配音，並了解語音 AI 的基本原理</textarea></div>
+          <button class="btn btn-primary" style="width:100%;margin-bottom:10px">✨ AI 生成課節計劃</button>
+          <div style="background:#F0FDF4;border-radius:9px;padding:12px;font-size:12px;color:#15803D;line-height:1.7">
+            <strong>AI 建議：</strong><br>
+            1. 熱身活動（5分鐘）：播放不同 AI 語音片段，讓學生猜測情感<br>
+            2. 示範演示（10分鐘）：教師示範使用 TTS 工具<br>
+            3. 小組創作（20分鐘）：學生為《魔法森林》故事配音<br>
+            4. 分享展示（10分鐘）：各組分享作品
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- T-ASSIGN -->
+    <div class="content screen" id="t-assign">
+      <div class="sec-header" style="margin-bottom:16px">
+        <div class="sec-title" style="font-size:16px">📋 任務發佈</div>
+      </div>
+      <div class="grid-2">
+        <div class="card">
+          <div class="sec-title" style="margin-bottom:14px">＋ 建立新任務</div>
+          <div class="form-row"><div class="form-label">任務名稱</div><input class="form-input" placeholder="例如：用 AI 畫一幅未來學校圖"></div>
+          <div class="form-row"><div class="form-label">相關模組</div><select class="form-input"><option>🎨 AI 圖像生成</option><option>🎙️ AI 語音工作室</option><option>📖 AI 電子書製作</option><option>🧠 AI 學習中心</option></select></div>
+          <div class="form-row"><div class="form-label">截止日期</div><input class="form-input" type="date" value="2026-06-25"></div>
+          <div class="form-row"><div class="form-label">任務說明</div><textarea class="form-input" placeholder="描述任務要求、評分標準…">使用 AI 圖像生成工具，創作一幅「2050年的學校」圖像。要求：
+• 包含至少3種未來科技元素
+• 寫出使用的 Prompt（不少於30字）
+• 說明你的創作思路</textarea></div>
+          <div class="form-row"><div class="form-label">分配對象</div><select class="form-input"><option>小四甲班 全班</option><option>指定學生</option></select></div>
+          <button class="btn btn-primary" style="width:100%">📤 發佈任務</button>
+        </div>
+        <div class="card">
+          <div class="sec-title" style="margin-bottom:14px">📋 進行中的任務</div>
+          <div style="display:flex;flex-direction:column;gap:10px">
+            <div style="border:1px solid #E5E7EB;border-radius:9px;padding:12px">
+              <div style="display:flex;justify-content:space-between;align-items:start;margin-bottom:8px">
+                <div><div style="font-size:13px;font-weight:700">用 AI 語音講故事</div><div style="font-size:11px;color:var(--muted)">截止：明天 6/19</div></div>
+                <span class="tag cy">待交 8人</span>
+              </div>
+              <div class="pb"><div class="pb-fill" style="width:71%;background:var(--accent3)"></div></div>
+              <div style="font-size:10px;color:var(--muted);margin-top:4px">20/28 已提交</div>
+            </div>
+            <div style="border:1px solid #E5E7EB;border-radius:9px;padding:12px">
+              <div style="display:flex;justify-content:space-between;align-items:start;margin-bottom:8px">
+                <div><div style="font-size:13px;font-weight:700">AI 圖像：未來城市</div><div style="font-size:11px;color:var(--muted)">截止：6/25</div></div>
+                <span class="tag cb">進行中</span>
+              </div>
+              <div class="pb"><div class="pb-fill" style="width:43%;background:var(--accent4)"></div></div>
+              <div style="font-size:10px;color:var(--muted);margin-top:4px">12/28 已提交</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- T-ASSESS -->
+    <div class="content screen" id="t-assess">
+      <div class="sec-header" style="margin-bottom:16px">
+        <div class="sec-title" style="font-size:16px">📊 學生評估 — 360度評核</div>
+        <div style="display:flex;gap:8px;align-items:center">
+          <select id="assess-select" class="form-input" style="width:auto;font-size:11px" onchange="switchStudent(this.value)">
+            <option>陳小明</option><option>王小雯</option><option>李大文</option><option>張美玲</option><option>林志豪</option>
+          </select>
+          <button class="btn btn-primary btn-sm">✨ AI 生成評語</button>
+        </div>
+      </div>
+      <div class="grid-2">
+        <div class="card">
+          <div class="sec-title" style="margin-bottom:12px">🎯 能力評分表 — <span id="assess-name">陳小明</span></div>
+          <div style="overflow-x:auto">
+            <div class="rubric-row"><div class="rubric-cell header label">能力範疇</div><div class="rubric-cell header" style="text-align:center">1<br><span style="font-weight:400">初步</span></div><div class="rubric-cell header" style="text-align:center">2<br><span style="font-weight:400">發展</span></div><div class="rubric-cell header" style="text-align:center">3<br><span style="font-weight:400">達標</span></div><div class="rubric-cell header" style="text-align:center">4<br><span style="font-weight:400">超越</span></div></div>
+            <div class="rubric-row"><div class="rubric-cell label">Prompt 撰寫</div><div class="rubric-cell" style="text-align:center"><button class="score-btn">1</button></div><div class="rubric-cell" style="text-align:center"><button class="score-btn">2</button></div><div class="rubric-cell" style="text-align:center"><button class="score-btn sel">3</button></div><div class="rubric-cell" style="text-align:center"><button class="score-btn">4</button></div></div>
+            <div class="rubric-row"><div class="rubric-cell label">AI 圖像創作</div><div class="rubric-cell" style="text-align:center"><button class="score-btn">1</button></div><div class="rubric-cell" style="text-align:center"><button class="score-btn">2</button></div><div class="rubric-cell" style="text-align:center"><button class="score-btn">3</button></div><div class="rubric-cell" style="text-align:center"><button class="score-btn sel">4</button></div></div>
+            <div class="rubric-row"><div class="rubric-cell label">語音配音</div><div class="rubric-cell" style="text-align:center"><button class="score-btn">1</button></div><div class="rubric-cell" style="text-align:center"><button class="score-btn sel">2</button></div><div class="rubric-cell" style="text-align:center"><button class="score-btn">3</button></div><div class="rubric-cell" style="text-align:center"><button class="score-btn">4</button></div></div>
+            <div class="rubric-row"><div class="rubric-cell label">電子書製作</div><div class="rubric-cell" style="text-align:center"><button class="score-btn">1</button></div><div class="rubric-cell" style="text-align:center"><button class="score-btn">2</button></div><div class="rubric-cell" style="text-align:center"><button class="score-btn sel">3</button></div><div class="rubric-cell" style="text-align:center"><button class="score-btn">4</button></div></div>
+            <div class="rubric-row"><div class="rubric-cell label">AI 倫理意識</div><div class="rubric-cell" style="text-align:center"><button class="score-btn">1</button></div><div class="rubric-cell" style="text-align:center"><button class="score-btn">2</button></div><div class="rubric-cell" style="text-align:center"><button class="score-btn sel">3</button></div><div class="rubric-cell" style="text-align:center"><button class="score-btn">4</button></div></div>
+          </div>
+          <div style="margin-top:12px"><div class="form-label" style="margin-bottom:5px">教師評語</div><textarea class="form-input" style="min-height:60px">陳小明在AI圖像創作方面表現出色，Prompt 描述詳盡。語音配音部分需要加強，建議多做練習。</textarea></div>
+          <button class="btn btn-primary" style="width:100%;margin-top:8px">💾 儲存評估</button>
+        </div>
+        <div class="card">
+          <div class="sec-title" style="margin-bottom:12px">🤖 AI 分析建議</div>
+          <div style="background:linear-gradient(135deg,#EEF2FF,#E0F2FE);border-radius:10px;padding:14px;margin-bottom:12px">
+            <div style="font-size:12px;font-weight:700;margin-bottom:8px;color:var(--primary)">📋 <span id="assess-name2">陳小明</span>學習摘要</div>
+            <div style="font-size:12px;line-height:1.8;color:#374151">
+              <strong>強項：</strong>AI 圖像創作能力突出，Prompt 工程理解良好<br>
+              <strong>待改善：</strong>語音模組參與度低，建議增加互動<br>
+              <strong>AI 建議：</strong>可為其安排進階圖像挑戰，同時設置語音配音輔導環節
+            </div>
+          </div>
+          <div class="sec-title" style="margin-bottom:10px">📊 雷達圖（各能力）</div>
+          <div style="display:flex;justify-content:center;padding:8px">
+            <svg viewBox="0 0 200 180" width="200" height="180">
+              <polygon points="100,20 168,65 144,148 56,148 32,65" fill="none" stroke="#E5E7EB" stroke-width="1"/>
+              <polygon points="100,40 148,72 130,136 70,136 52,72" fill="none" stroke="#E5E7EB" stroke-width="1"/>
+              <polygon points="100,60 128,79 116,124 84,124 72,79" fill="none" stroke="#E5E7EB" stroke-width="1"/>
+              <polygon points="100,18 160,62 130,142 70,142 40,62" fill="rgba(91,79,232,0.15)" stroke="var(--primary)" stroke-width="2"/>
+              <circle cx="100" cy="18" r="4" fill="var(--primary)"/>
+              <circle cx="160" cy="62" r="4" fill="var(--primary)"/>
+              <circle cx="130" cy="142" r="4" fill="var(--primary)"/>
+              <circle cx="70" cy="142" r="4" fill="var(--primary)"/>
+              <circle cx="40" cy="62" r="4" fill="var(--primary)"/>
+              <text x="100" y="12" text-anchor="middle" font-size="9" fill="var(--muted)">Prompt</text>
+              <text x="172" y="67" text-anchor="start" font-size="9" fill="var(--muted)">圖像</text>
+              <text x="138" y="158" text-anchor="middle" font-size="9" fill="var(--muted)">電子書</text>
+              <text x="60" y="158" text-anchor="middle" font-size="9" fill="var(--muted)">語音</text>
+              <text x="22" y="67" text-anchor="end" font-size="9" fill="var(--muted)">倫理</text>
+            </svg>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- T-REPORT -->
+    <div class="content screen" id="t-report">
+      <div class="sec-header" style="margin-bottom:16px">
+        <div class="sec-title" style="font-size:16px">📄 AI 報告生成</div>
+        <div style="display:flex;gap:8px">
+          <button class="btn btn-ghost btn-sm">⬇️ 下載全部</button>
+          <button class="btn btn-primary btn-sm">✨ AI 生成新報告</button>
+        </div>
+      </div>
+      <div class="grid-2">
+        <div class="card">
+          <div class="sec-title" style="margin-bottom:12px">⚙️ 生成設定</div>
+          <div class="form-row"><div class="form-label">報告類型</div><select class="form-input"><option>班級整體進度報告</option><option>個別學生報告</option><option>模組使用分析</option><option>家長匯報報告</option></select></div>
+          <div class="form-row"><div class="form-label">報告期間</div><select class="form-input"><option>2026年6月（本月）</option><option>2026年第一學期</option><option>2025-26整個學年</option></select></div>
+          <div class="form-row"><div class="form-label">包含內容</div>
+            <label style="display:flex;align-items:center;gap:6px;font-size:12px;margin-bottom:5px"><input type="checkbox" checked> 學生進度統計</label>
+            <label style="display:flex;align-items:center;gap:6px;font-size:12px;margin-bottom:5px"><input type="checkbox" checked> 模組使用數據</label>
+            <label style="display:flex;align-items:center;gap:6px;font-size:12px;margin-bottom:5px"><input type="checkbox" checked> AI 學習建議</label>
+            <label style="display:flex;align-items:center;gap:6px;font-size:12px"><input type="checkbox"> 作品集截圖</label>
+          </div>
+          <button class="btn btn-primary" style="width:100%">🤖 生成報告</button>
+        </div>
+        <div class="card">
+          <div class="sec-title" style="margin-bottom:12px">📁 最近生成的報告</div>
+          <div style="display:flex;flex-direction:column;gap:8px">
+            <div style="display:flex;align-items:center;gap:10px;padding:10px;background:var(--bg);border-radius:8px">
+              <span style="font-size:24px">📊</span>
+              <div style="flex:1"><div style="font-size:12px;font-weight:600">6月班級進度報告</div><div style="font-size:10px;color:var(--muted)">生成於 2026-06-15 · PDF</div></div>
+              <button class="btn btn-ghost btn-sm">⬇️</button>
+            </div>
+            <div style="display:flex;align-items:center;gap:10px;padding:10px;background:var(--bg);border-radius:8px">
+              <span style="font-size:24px">👤</span>
+              <div style="flex:1"><div style="font-size:12px;font-weight:600">陳小明個人報告</div><div style="font-size:10px;color:var(--muted)">生成於 2026-06-10 · DOCX</div></div>
+              <button class="btn btn-ghost btn-sm">⬇️</button>
+            </div>
+            <div style="display:flex;align-items:center;gap:10px;padding:10px;background:var(--bg);border-radius:8px">
+              <span style="font-size:24px">👨‍👩‍👧</span>
+              <div style="flex:1"><div style="font-size:12px;font-weight:600">家長匯報（全班）</div><div style="font-size:10px;color:var(--muted)">生成於 2026-06-01 · PDF</div></div>
+              <button class="btn btn-ghost btn-sm">⬇️</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </main>
+</div>
+
+<!-- ══════════════════════════════════════
+     SCHOOL ADMIN PORTAL
+══════════════════════════════════════ -->
+<div class="portal" id="portal-school">
+  <aside class="sidebar" id="s-sidebar">
+    <div class="sb-logo">
+      <div class="sb-logo-icon" style="background:linear-gradient(135deg,#10B981,#059669)">🏫</div>
+      <div><div class="sb-logo-text">AI學習平台</div><div class="sb-logo-sub">學校管理員</div></div>
+    </div>
+    <div class="sb-user">
+      <div class="avatar" style="background:linear-gradient(135deg,#10B981,#059669)">陳</div>
+      <div><div style="color:#fff;font-size:12px;font-weight:600">陳校長</div><div style="color:rgba(255,255,255,.4);font-size:10px">學校管理員</div></div>
+    </div>
+    <nav class="nav">
+      <div class="nav-sec">概覽</div>
+      <div class="nav-item active" onclick="sShow('s-dashboard')"><span class="nav-icon">🏠</span>學校總覽</div>
+      <div class="nav-item" onclick="sShow('s-classes')"><span class="nav-icon">📚</span>班級管理</div>
+      <div class="nav-sec">平台管理</div>
+      <div class="nav-item" onclick="sShow('s-tokens')"><span class="nav-icon">🪙</span>Token 管理</div>
+      <div class="nav-item" onclick="sShow('s-modules')"><span class="nav-icon">⚙️</span>模組設定</div>
+      <div class="nav-sec">報告</div>
+      <div class="nav-item" onclick="sShow('s-analytics')"><span class="nav-icon">📊</span>學校分析報告</div>
+      <div class="nav-item" onclick="sShow('s-edb')"><span class="nav-icon">🏛️</span>教育局匯報</div>
+    </nav>
+    <div class="sb-bottom">
+      <div style="display:flex;justify-content:space-between;margin-bottom:5px">
+        <span style="font-size:10px;color:rgba(255,255,255,.4)">🪙 全校 Token</span>
+        <strong style="font-size:10px;color:rgba(255,255,255,.7)">68,200 / 100,000</strong>
+      </div>
+      <div style="height:5px;background:rgba(255,255,255,.1);border-radius:3px;overflow:hidden">
+        <div style="height:100%;width:68%;background:linear-gradient(90deg,#10B981,#059669);border-radius:3px"></div>
+      </div>
+    </div>
+  </aside>
+
+  <main class="main">
+    <div class="topbar">
+      <div class="topbar-title" id="s-topbar-title">學校總覽 <span class="topbar-sub">2026-27 學年 · 第一學期</span></div>
+      <div style="display:flex;gap:8px">
+        <button class="btn btn-ghost btn-sm">📥 匯入數據</button>
+        <button class="btn btn-primary btn-sm" style="background:#10B981">📊 生成學校報告</button>
+      </div>
+    </div>
+
+    <!-- S-DASHBOARD -->
+    <div class="content screen active" id="s-dashboard">
+      <div class="banner" style="background:linear-gradient(135deg,#065F46,#10B981)">
+        <h2>🏫 學校 AI 教育平台 — 2026-27</h2>
+        <p>全校平台運行正常。本學期目標完成率 73%，比上學期提升 18%。</p>
+        <div class="chips">
+          <span class="chip">👩‍🏫 12 位教師</span>
+          <span class="chip">👥 336 位學生</span>
+          <span class="chip">📚 12 個班級</span>
+          <span class="chip">✅ P3–P6 全覆蓋</span>
+        </div>
+      </div>
+      <div class="grid-4">
+        <div class="stat-card"><div class="stat-val" style="color:#10B981">336</div><div class="stat-lbl">活躍學生</div><div class="stat-chg">P3–P6 全部使用</div></div>
+        <div class="stat-card"><div class="stat-val" style="color:var(--primary)">73%</div><div class="stat-lbl">整體完成率</div><div class="stat-chg">↑ +18% 比上學期</div></div>
+        <div class="stat-card"><div class="stat-val" style="color:var(--accent2)">4,218</div><div class="stat-lbl">本月 AI 作品</div><div class="stat-chg">↑ +32% 本月</div></div>
+        <div class="stat-card"><div class="stat-val" style="color:var(--accent)">68%</div><div class="stat-lbl">Token 已使用</div><div class="stat-chg">餘額充足</div></div>
+      </div>
+      <div class="grid-2">
+        <div class="card">
+          <div class="sec-title" style="margin-bottom:14px">📈 各年級完成率</div>
+          <div class="bar-chart">
+            <div class="bar-col"><div class="bar" style="height:55px;background:var(--primary)"></div><div class="bar-lbl">P3<br>65%</div></div>
+            <div class="bar-col"><div class="bar" style="height:62px;background:var(--primary-l)"></div><div class="bar-lbl">P3B<br>72%</div></div>
+            <div class="bar-col"><div class="bar" style="height:60px;background:var(--accent4)"></div><div class="bar-lbl">P4A<br>70%</div></div>
+            <div class="bar-col"><div class="bar" style="height:65px;background:var(--accent4)"></div><div class="bar-lbl">P4B<br>76%</div></div>
+            <div class="bar-col"><div class="bar" style="height:70px;background:var(--accent3)"></div><div class="bar-lbl">P5A<br>82%</div></div>
+            <div class="bar-col"><div class="bar" style="height:72px;background:var(--accent3)"></div><div class="bar-lbl">P5B<br>84%</div></div>
+            <div class="bar-col"><div class="bar" style="height:60px;background:var(--accent2)"></div><div class="bar-lbl">P6A<br>70%</div></div>
+            <div class="bar-col"><div class="bar" style="height:58px;background:var(--accent2)"></div><div class="bar-lbl">P6B<br>68%</div></div>
+          </div>
+        </div>
+        <div class="card">
+          <div class="sec-title" style="margin-bottom:14px">🎨 AI 作品類型分佈</div>
+          <div class="donut-wrap">
+            <div class="donut"></div>
+            <div class="donut-legend">
+              <div class="dl-item"><div class="dl-dot" style="background:var(--primary)"></div>AI 圖像生成 62%</div>
+              <div class="dl-item"><div class="dl-dot" style="background:var(--accent4)"></div>AI 語音配音 16%</div>
+              <div class="dl-item"><div class="dl-dot" style="background:var(--accent3)"></div>AI 電子書 14%</div>
+              <div class="dl-item"><div class="dl-dot" style="background:#E5E7EB"></div>其他 8%</div>
+            </div>
+          </div>
+          <div class="divider"></div>
+          <div class="sec-title" style="margin-bottom:10px">🏆 本月最活躍班級</div>
+          <div class="tbl-wrap">
+            <table class="tbl"><thead><tr><th>班級</th><th>教師</th><th>完成率</th><th>作品數</th></tr></thead><tbody>
+              <tr><td>小五甲班</td><td>李老師</td><td><span class="tag cg">84%</span></td><td>412</td></tr>
+              <tr><td>小五乙班</td><td>王老師</td><td><span class="tag cg">82%</span></td><td>398</td></tr>
+              <tr><td>小四乙班</td><td>張老師</td><td><span class="tag cb">76%</span></td><td>356</td></tr>
+            </tbody></table>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- S-CLASSES -->
+    <div class="content screen" id="s-classes">
+      <div class="sec-header" style="margin-bottom:16px">
+        <div class="sec-title" style="font-size:16px">📚 班級與教師管理</div>
+        <button class="btn btn-primary btn-sm" style="background:#10B981">＋ 新增班級</button>
+      </div>
+      <div class="card">
+        <table class="tbl">
+          <thead><tr><th>班級</th><th>教師</th><th>學生人數</th><th>完成率</th><th>本月作品</th><th>Token 使用</th><th>狀態</th><th></th></tr></thead>
+          <tbody>
+            <tr><td><strong>小三甲 P3A</strong></td><td>吳老師</td><td>28</td><td><span class="tag cb">65%</span></td><td>312</td><td><div class="row-pb"><div class="row-pb-fill" style="width:55%;background:#10B981"></div></div> 55%</td><td><span class="tag cg">正常</span></td><td><button class="btn btn-ghost btn-sm">詳情</button></td></tr>
+            <tr><td><strong>小三乙 P3B</strong></td><td>鄭老師</td><td>27</td><td><span class="tag cb">72%</span></td><td>298</td><td><div class="row-pb"><div class="row-pb-fill" style="width:62%;background:#10B981"></div></div> 62%</td><td><span class="tag cg">正常</span></td><td><button class="btn btn-ghost btn-sm">詳情</button></td></tr>
+            <tr><td><strong>小四甲 P4A</strong></td><td>黃老師</td><td>28</td><td><span class="tag cb">70%</span></td><td>348</td><td><div class="row-pb"><div class="row-pb-fill" style="width:68%;background:#10B981"></div></div> 68%</td><td><span class="tag cg">正常</span></td><td><button class="btn btn-ghost btn-sm">詳情</button></td></tr>
+            <tr><td><strong>小四乙 P4B</strong></td><td>張老師</td><td>29</td><td><span class="tag cg">76%</span></td><td>356</td><td><div class="row-pb"><div class="row-pb-fill" style="width:72%;background:#10B981"></div></div> 72%</td><td><span class="tag cg">正常</span></td><td><button class="btn btn-ghost btn-sm">詳情</button></td></tr>
+            <tr><td><strong>小五甲 P5A</strong></td><td>李老師</td><td>30</td><td><span class="tag cg">84%</span></td><td>412</td><td><div class="row-pb"><div class="row-pb-fill" style="width:85%;background:var(--accent2)"></div></div> 85%</td><td><span class="tag cy">留意Token</span></td><td><button class="btn btn-ghost btn-sm">詳情</button></td></tr>
+            <tr><td><strong>小五乙 P5B</strong></td><td>王老師</td><td>28</td><td><span class="tag cg">82%</span></td><td>398</td><td><div class="row-pb"><div class="row-pb-fill" style="width:80%;background:#10B981"></div></div> 80%</td><td><span class="tag cg">正常</span></td><td><button class="btn btn-ghost btn-sm">詳情</button></td></tr>
+            <tr><td><strong>小六甲 P6A</strong></td><td>劉老師</td><td>27</td><td><span class="tag cb">70%</span></td><td>324</td><td><div class="row-pb"><div class="row-pb-fill" style="width:68%;background:#10B981"></div></div> 68%</td><td><span class="tag cg">正常</span></td><td><button class="btn btn-ghost btn-sm">詳情</button></td></tr>
+            <tr><td><strong>小六乙 P6B</strong></td><td>陳老師</td><td>28</td><td><span class="tag cb">68%</span></td><td>298</td><td><div class="row-pb"><div class="row-pb-fill" style="width:65%;background:#10B981"></div></div> 65%</td><td><span class="tag cg">正常</span></td><td><button class="btn btn-ghost btn-sm">詳情</button></td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- S-TOKENS -->
+    <div class="content screen" id="s-tokens">
+      <div class="sec-header" style="margin-bottom:16px">
+        <div class="sec-title" style="font-size:16px">🪙 Token 管理</div>
+        <button class="btn btn-primary btn-sm" style="background:#10B981">＋ 增購 Token</button>
+      </div>
+      <div class="grid-2">
+        <div class="card">
+          <div class="sec-title" style="margin-bottom:14px">📊 全校 Token 使用概況</div>
+          <div style="text-align:center;margin-bottom:16px">
+            <div style="font-size:36px;font-weight:800;color:#10B981">68,200</div>
+            <div style="font-size:13px;color:var(--muted)">已使用 / 100,000 總量</div>
+            <div style="margin:12px auto;width:80%;height:10px;background:#F3F4F6;border-radius:5px;overflow:hidden">
+              <div style="width:68%;height:100%;background:linear-gradient(90deg,#10B981,#059669);border-radius:5px"></div>
+            </div>
+            <div style="font-size:12px;color:var(--muted)">餘額：31,800 Token · 預計可使用至 8月底</div>
+          </div>
+          <div class="divider"></div>
+          <div class="sec-title" style="margin-bottom:10px">各班 Token 分配</div>
+          <div class="usage-bar-wrap">
+            <div class="usage-row"><div class="usage-label">小五甲</div><div class="usage-bar"><div class="usage-fill" style="width:85%;background:var(--accent2)"></div></div><div class="usage-val">8,500</div></div>
+            <div class="usage-row"><div class="usage-label">小五乙</div><div class="usage-bar"><div class="usage-fill" style="width:80%;background:#10B981"></div></div><div class="usage-val">8,000</div></div>
+            <div class="usage-row"><div class="usage-label">小四乙</div><div class="usage-bar"><div class="usage-fill" style="width:72%;background:#10B981"></div></div><div class="usage-val">7,200</div></div>
+            <div class="usage-row"><div class="usage-label">小四甲</div><div class="usage-bar"><div class="usage-fill" style="width:68%;background:#10B981"></div></div><div class="usage-val">6,820</div></div>
+            <div class="usage-row"><div class="usage-label">小六甲</div><div class="usage-bar"><div class="usage-fill" style="width:65%;background:#10B981"></div></div><div class="usage-val">6,500</div></div>
+            <div class="usage-row"><div class="usage-label">其他班</div><div class="usage-bar"><div class="usage-fill" style="width:55%;background:var(--accent4)"></div></div><div class="usage-val">31,180</div></div>
+          </div>
+        </div>
+        <div class="card">
+          <div class="sec-title" style="margin-bottom:14px">⚙️ Token 分配設定</div>
+          <div class="form-row"><div class="form-label">每班月度上限</div><input class="form-input" value="10,000"></div>
+          <div class="form-row"><div class="form-label">警告閾值</div><input class="form-input" value="80%"></div>
+          <div class="form-row"><div class="form-label">超額處理</div><select class="form-input"><option>自動暫停並通知管理員</option><option>允許超額（扣下月配額）</option><option>僅發警告通知</option></select></div>
+          <button class="btn btn-primary btn-sm" style="background:#10B981;width:100%">儲存設定</button>
+          <div class="divider"></div>
+          <div class="sec-title" style="margin-bottom:10px">📦 套餐資料</div>
+          <div style="background:#F0FDF4;border-radius:9px;padding:12px;font-size:12px;line-height:1.8">
+            <div><strong>當前套餐：</strong>套餐二（A1–A3）</div>
+            <div><strong>合約期：</strong>2026-09-01 至 2029-08-31</div>
+            <div><strong>年度 Token：</strong>100,000</div>
+            <div><strong>下次續約：</strong>2027-08-01</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- S-MODULES -->
+    <div class="content screen" id="s-modules">
+      <div class="sec-header" style="margin-bottom:16px">
+        <div class="sec-title" style="font-size:16px">⚙️ 模組設定</div>
+      </div>
+      <div class="grid-2">
+        <div class="card">
+          <div class="sec-title" style="margin-bottom:14px">🔧 已啟用模組</div>
+          <div class="module-row">
+            <div style="flex:1"><div style="font-size:13px;font-weight:700">🎨 A1 AI 教學應用平台</div><div style="font-size:11px;color:var(--muted)">iOS/Android · 課程內容 · AI Lab</div></div>
+            <div class="toggle on" onclick="this.classList.toggle('on');this.classList.toggle('off')"></div>
+          </div>
+          <div class="module-row">
+            <div style="flex:1"><div style="font-size:13px;font-weight:700">🖼️ A2 AI 圖像生成</div><div style="font-size:11px;color:var(--muted)">Text-to-Image · 風格選擇 · 圖庫</div></div>
+            <div class="toggle on" onclick="this.classList.toggle('on');this.classList.toggle('off')"></div>
+          </div>
+          <div class="module-row">
+            <div style="flex:1"><div style="font-size:13px;font-weight:700">🎙️ A3 AI 聲音工作室</div><div style="font-size:11px;color:var(--muted)">TTS · 聲音克隆 · 多語言</div></div>
+            <div class="toggle on" onclick="this.classList.toggle('on');this.classList.toggle('off')"></div>
+          </div>
+          <div class="module-row">
+            <div style="flex:1"><div style="font-size:13px;font-weight:700">📖 A4 AI 電子書</div><div style="font-size:11px;color:var(--muted)">E-book · PDF · MP4 輸出</div></div>
+            <div class="toggle off" onclick="this.classList.toggle('on');this.classList.toggle('off')"></div>
+          </div>
+          <div class="module-row">
+            <div style="flex:1"><div style="font-size:13px;font-weight:700">📊 B2 學生評估系統</div><div style="font-size:11px;color:var(--muted)">360度評核 · AI 分析報告</div></div>
+            <div class="toggle on" onclick="this.classList.toggle('on');this.classList.toggle('off')"></div>
+          </div>
+          <div class="module-row" style="border-bottom:none">
+            <div style="flex:1"><div style="font-size:13px;font-weight:700">📄 B3 報告生成</div><div style="font-size:11px;color:var(--muted)">AI 報告 · 家長匯報 · EDB 格式</div></div>
+            <div class="toggle on" onclick="this.classList.toggle('on');this.classList.toggle('off')"></div>
+          </div>
+        </div>
+        <div class="card">
+          <div class="sec-title" style="margin-bottom:14px">🔒 安全與合規設定</div>
+          <div class="form-row"><div class="form-label">AI 內容過濾</div><select class="form-input"><option>嚴格（適合小學）</option><option>標準</option></select></div>
+          <div class="form-row"><div class="form-label">數據存儲地區</div><select class="form-input"><option>香港（本地）</option><option>亞太區</option></select></div>
+          <div class="form-row"><div class="form-label">AI 模型</div><select class="form-input"><option>平台預設（GPT-4 + Claude + SD）</option><option>僅使用 Claude</option></select></div>
+          <div class="form-row"><div class="form-label">學生帳戶權限</div>
+            <label style="display:flex;align-items:center;gap:6px;font-size:12px;margin-bottom:4px"><input type="checkbox" checked> 可下載作品</label>
+            <label style="display:flex;align-items:center;gap:6px;font-size:12px;margin-bottom:4px"><input type="checkbox" checked> 可分享至班級</label>
+            <label style="display:flex;align-items:center;gap:6px;font-size:12px"><input type="checkbox"> 可公開分享（校外）</label>
+          </div>
+          <button class="btn btn-primary btn-sm" style="background:#10B981;width:100%">💾 儲存設定</button>
+          <div class="hint" style="margin-top:8px">所有設定符合香港個人資料（私隱）條例及教育局指引</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- S-ANALYTICS -->
+    <div class="content screen" id="s-analytics">
+      <div class="sec-header" style="margin-bottom:16px">
+        <div class="sec-title" style="font-size:16px">📊 學校分析報告</div>
+        <button class="btn btn-primary btn-sm" style="background:#10B981">⬇️ 下載完整報告</button>
+      </div>
+      <div class="grid-2">
+        <div class="card">
+          <div class="sec-title" style="margin-bottom:14px">📈 學期進度對比</div>
+          <table class="tbl">
+            <thead><tr><th>指標</th><th>上學期</th><th>本學期</th><th>變化</th></tr></thead>
+            <tbody>
+              <tr><td>整體完成率</td><td>55%</td><td>73%</td><td><span class="tag cg">↑ +18%</span></td></tr>
+              <tr><td>學生每月作品數</td><td>2.8</td><td>4.1</td><td><span class="tag cg">↑ +46%</span></td></tr>
+              <tr><td>教師培訓出席率</td><td>78%</td><td>92%</td><td><span class="tag cg">↑ +14%</span></td></tr>
+              <tr><td>平均學習分數</td><td>68</td><td>76</td><td><span class="tag cg">↑ +8分</span></td></tr>
+              <tr><td>Token 使用效率</td><td>62%</td><td>68%</td><td><span class="tag cb">↑ +6%</span></td></tr>
+            </tbody>
+          </table>
+        </div>
+        <div class="card">
+          <div class="sec-title" style="margin-bottom:14px">🏆 各年級 AI 素養達標率</div>
+          <div style="display:flex;flex-direction:column;gap:10px">
+            <div><div style="display:flex;justify-content:space-between;margin-bottom:4px"><span style="font-size:12px;font-weight:600">小三 P3</span><span style="font-size:12px;font-weight:700;color:var(--accent4)">68%</span></div><div class="pb"><div class="pb-fill" style="width:68%;background:var(--accent4)"></div></div></div>
+            <div><div style="display:flex;justify-content:space-between;margin-bottom:4px"><span style="font-size:12px;font-weight:600">小四 P4</span><span style="font-size:12px;font-weight:700;color:var(--primary)">73%</span></div><div class="pb"><div class="pb-fill" style="width:73%;background:var(--primary)"></div></div></div>
+            <div><div style="display:flex;justify-content:space-between;margin-bottom:4px"><span style="font-size:12px;font-weight:600">小五 P5</span><span style="font-size:12px;font-weight:700;color:var(--accent3)">83%</span></div><div class="pb"><div class="pb-fill" style="width:83%;background:var(--accent3)"></div></div></div>
+            <div><div style="display:flex;justify-content:space-between;margin-bottom:4px"><span style="font-size:12px;font-weight:600">小六 P6</span><span style="font-size:12px;font-weight:700;color:var(--accent2)">69%</span></div><div class="pb"><div class="pb-fill" style="width:69%;background:var(--accent2)"></div></div></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- S-EDB -->
+    <div class="content screen" id="s-edb">
+      <div class="sec-header" style="margin-bottom:16px">
+        <div class="sec-title" style="font-size:16px">🏛️ 教育局匯報</div>
+        <button class="btn btn-primary btn-sm" style="background:#10B981">📤 提交至教育局</button>
+      </div>
+      <div class="card" style="margin-bottom:16px">
+        <div style="background:#EFF6FF;border-radius:9px;padding:14px;margin-bottom:14px;font-size:12px;color:#1D4ED8;line-height:1.8">
+          📋 <strong>EDB IT in Education 年度匯報</strong>：本報告符合教育局「資訊科技教育」年度匯報格式要求，已涵蓋學生 AI 素養達標數據、教師專業發展紀錄及平台使用統計。
+        </div>
+        <div class="grid-2">
+          <div>
+            <div class="sec-title" style="margin-bottom:10px">📋 匯報內容</div>
+            <div class="timeline">
+              <div class="tl-item"><div class="tl-dot bgg">✅</div><div class="tl-body"><div class="tl-title">學生 AI 素養達標率</div><div class="tl-sub">336/336 學生有紀錄 · 達標率 73%</div></div></div>
+              <div class="tl-item"><div class="tl-dot bgg">✅</div><div class="tl-body"><div class="tl-title">教師專業培訓紀錄</div><div class="tl-sub">12 位教師完成培訓 · 共 120 課時</div></div></div>
+              <div class="tl-item"><div class="tl-dot bgg">✅</div><div class="tl-body"><div class="tl-title">平台使用統計</div><div class="tl-sub">AI 作品 4,218 件 · Token 使用 68,200</div></div></div>
+              <div class="tl-item" style="padding-bottom:0"><div class="tl-dot bgp">📝</div><div class="tl-body"><div class="tl-title">下學年計劃</div><div class="tl-sub">待填寫 2027-28 學年目標</div></div></div>
+            </div>
+          </div>
+          <div>
+            <div class="sec-title" style="margin-bottom:10px">📅 匯報時間表</div>
+            <div style="display:flex;flex-direction:column;gap:8px">
+              <div class="alert-item"><div class="alert-dot" style="background:var(--accent3)"></div><div style="flex:1"><div style="font-size:12px;font-weight:600">期中匯報（已完成）</div><div style="font-size:11px;color:var(--muted)">2027年1月15日提交</div></div><span class="tag cg">完成</span></div>
+              <div class="alert-item"><div class="alert-dot" style="background:var(--accent)"></div><div style="flex:1"><div style="font-size:12px;font-weight:600">年度總結匯報</div><div style="font-size:11px;color:var(--muted)">截止：2027年8月31日</div></div><span class="tag cy">待提交</span></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </main>
+</div>
+
+<script>
+// ── Role switcher ──
+function setRole(role) {
+  document.querySelectorAll('.portal').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.role-btn').forEach(b => b.classList.remove('active'));
+  document.getElementById('portal-' + role).classList.add('active');
+  event.currentTarget.classList.add('active');
+}
+
+// ── Score buttons — event delegation (works for all buttons, always) ──
+document.addEventListener('click', function(e) {
+  if (e.target.classList.contains('score-btn')) {
+    const row = e.target.closest('.rubric-row');
+    if (row) {
+      row.querySelectorAll('.score-btn').forEach(b => b.classList.remove('sel'));
+      e.target.classList.add('sel');
+    }
+  }
+});
+
+// ── Student row hover highlight ──
+document.addEventListener('mouseover', function(e) {
+  const row = e.target.closest('.student-row');
+  if (row) row.style.background = '#F0F4FF';
+});
+document.addEventListener('mouseout', function(e) {
+  const row = e.target.closest('.student-row');
+  if (row) row.style.background = '';
+});
+
+// ── Open assessment for a specific student ──
+const studentData = {
+  '陳小明': { scores: [3,4,2,3,3], comment: '陳小明在AI圖像創作方面表現出色，Prompt 描述詳盡。語音配音部分需要加強，建議多做練習。' },
+  '王小雯': { scores: [4,4,3,4,4], comment: '王小雯各方面均表現優異，尤其在電子書製作上創意豐富，繼續保持！' },
+  '李大文': { scores: [1,1,1,1,2], comment: '李大文學習進度需要關注，建議安排額外輔導，先從AI圖像生成開始建立信心。' },
+  '張美玲': { scores: [2,3,1,2,2], comment: '張美玲在圖像生成上有進步，語音模組完成度較低，需要重點跟進。' },
+  '林志豪': { scores: [4,4,4,4,4], comment: '林志豪表現卓越，是班級中的AI學習榜樣，可考慮讓其擔任小老師協助其他同學。' },
+};
+function openAssess(name) {
+  tShow('t-assess');
+  switchStudent(name);
+}
+function switchStudent(name) {
+  // Update dropdown
+  const sel = document.getElementById('assess-select');
+  if (sel) { for (let opt of sel.options) { if (opt.text === name) { opt.selected = true; break; } } }
+  // Update name labels
+  ['assess-name','assess-name2'].forEach(id => { const el = document.getElementById(id); if (el) el.textContent = name; });
+  // Update score buttons
+  const data = studentData[name];
+  if (!data) return;
+  const rows = document.querySelectorAll('#t-assess .rubric-row:not(:first-child)');
+  rows.forEach((row, i) => {
+    row.querySelectorAll('.score-btn').forEach(btn => {
+      btn.classList.toggle('sel', parseInt(btn.textContent) === data.scores[i]);
+    });
+  });
+  // Update comment textarea
+  const ta = document.querySelector('#t-assess textarea.form-input');
+  if (ta) ta.value = data.comment;
+}
+
+// ── Teacher nav ──
+const tTitles = {
+  't-dashboard': ['教師主頁', '2026年6月18日 · 週四'],
+  't-class':     ['班級管理', '小四甲班 · 28位學生'],
+  't-planner':   ['課程計劃', 'Co-planning · 2026-27 第一學期'],
+  't-assign':    ['任務發佈', '進行中任務 2 個'],
+  't-assess':    ['學生評估', '360度評核 · AI 分析'],
+  't-report':    ['AI 報告生成', '自動生成 · 多種格式'],
+};
+function tShow(id) {
+  document.querySelectorAll('#portal-teacher .screen').forEach(s => s.classList.remove('active'));
+  document.querySelectorAll('#t-sidebar .nav-item').forEach(n => n.classList.remove('active'));
+  document.getElementById(id).classList.add('active');
+  const [t, s] = tTitles[id] || [id, ''];
+  document.getElementById('t-topbar-title').innerHTML = t + ' <span class="topbar-sub">' + s + '</span>';
+  document.querySelectorAll('#t-sidebar .nav-item').forEach(item => {
+    if (item.getAttribute('onclick') && item.getAttribute('onclick').includes("'" + id + "'")) item.classList.add('active');
+  });
+}
+
+// ── School nav ──
+const sTitles = {
+  's-dashboard': ['學校總覽', '2026-27 學年 · 第一學期'],
+  's-classes':   ['班級管理', '12 個班級 · 336 位學生'],
+  's-tokens':    ['Token 管理', '全校使用量監控'],
+  's-modules':   ['模組設定', '平台功能與安全設定'],
+  's-analytics': ['學校分析報告', '學期進度與達標率'],
+  's-edb':       ['教育局匯報', 'IT in Education 年度匯報'],
+};
+function sShow(id) {
+  document.querySelectorAll('#portal-school .screen').forEach(s => s.classList.remove('active'));
+  document.querySelectorAll('#s-sidebar .nav-item').forEach(n => n.classList.remove('active'));
+  document.getElementById(id).classList.add('active');
+  const [t, s] = sTitles[id] || [id, ''];
+  document.getElementById('s-topbar-title').innerHTML = t + ' <span class="topbar-sub">' + s + '</span>';
+  document.querySelectorAll('#s-sidebar .nav-item').forEach(item => {
+    if (item.getAttribute('onclick') && item.getAttribute('onclick').includes("'" + id + "'")) item.classList.add('active');
+  });
+}
+</script>
+</body>
+</html>
