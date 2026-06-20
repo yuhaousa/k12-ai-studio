@@ -35,6 +35,9 @@ function currentStoryIsSaved() {
 
 function imageErrorMessage(error) {
   const message = String(error || "");
+  if (/INSUFFICIENT_BALANCE|balance|余额|餘額/i.test(message)) {
+    return "Image account balance is insufficient. Please top up the Sub2API account, then retry.";
+  }
   if (/QUOTA_EXHAUSTED|额度已用完|quota/i.test(message)) {
     return "Image quota is used up. Please update the AI key or add image quota, then retry.";
   }
@@ -742,9 +745,12 @@ async function generateStoryImages(pages) {
       state.data.bookPages = state.data.bookPages.map(item => item.id === result.page.id ? result.page : item);
       refreshStoryOutputs();
     } catch (error) {
+      const friendlyMessage = imageErrorMessage(error.message);
       state.currentStoryPages = state.currentStoryPages.map(item => item.id === page.id ? { ...item, imageError: error.message, imageStatus: "failed" } : item);
       state.data.bookPages = state.data.bookPages.map(item => item.id === page.id ? { ...item, imageError: error.message, imageStatus: "failed" } : item);
+      if ($("#storyStatus")) $("#storyStatus").textContent = friendlyMessage;
       refreshStoryOutputs();
+      if (/INSUFFICIENT_BALANCE|QUOTA_EXHAUSTED|API_KEY_DISABLED/i.test(error.message)) return;
     }
   }
 }

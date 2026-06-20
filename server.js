@@ -289,7 +289,7 @@ async function callImageAi(db, prompt) {
   const baseUrl = String(settings.baseUrl || "").replace(/\/+$/, "");
   const endpoint = `${baseUrl}/images/generations`;
   const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), 180000);
+  const timeout = setTimeout(() => controller.abort(), 300000);
 
   try {
     const response = await fetch(endpoint, {
@@ -318,6 +318,11 @@ async function callImageAi(db, prompt) {
     if (first.url) return { imageUrl: first.url, source: "sub2api-image" };
     if (first.b64_json) return { imageUrl: `data:image/png;base64,${first.b64_json}`, source: "sub2api-image" };
     throw new Error("Image provider returned no image URL or base64 data");
+  } catch (error) {
+    if (error.name === "AbortError") {
+      throw new Error("Image generation timed out after 5 minutes. Please retry this page.");
+    }
+    throw error;
   } finally {
     clearTimeout(timeout);
   }
