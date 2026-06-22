@@ -8,7 +8,11 @@ const i18n = {
     logout: "Logout", closed: "Close", previous: "‹ Previous", next: "Next ›", readaloud: "Read aloud", save: "Save", submit: "Submit", approve: "Approve", read: "Read",
     submittedwork: "Submitted Work", nowriting: "No writing submitted yet.", savedbooks: "Saved Storybooks", nobooks: "No storybooks saved yet.",
     writing_sample: "My campus story", writing_draft: "During lunch today, I saw classmates helping each other on the playground, and felt warm in my heart.", story_seed: "Enter your description (Prompt)", style: "Select Style", language: "Language", generate: "🪄 Generate Storybook", exportpdf: "Export PDF", saveto: "Save to portfolio", submitted: "Submitted",
-    close: "Close", page: "Page", pending: "pending", score: "Score"
+    close: "Close", page: "Page", pending: "pending", score: "Score",
+    aiusage: "AI Usage", workspace: "workspace", role: "Role", student: "Student", teacher: "Teacher", admin: "Admin",
+    readtext: "Read text", lateststorybook: "Latest storybook", waiting: "Waiting", no_pages_yet: "No pages yet", pages: "pages",
+    prompt: "Prompt", image_not_ready: "Image not ready", writing: "Writing",
+    question: "Question", answer: "Answer", time: "Time", mandarin: "Mandarin (普通话)", cantonese: "Cantonese (廣東話)", voice: "Voice", voicepick: "Voice option"
   },
   zh: {
     signin: "登入", chooserole: "選擇一個校園角色來開啟對應的工作區。", password: "密碼", enterplatform: "進入平台",
@@ -19,7 +23,11 @@ const i18n = {
     logout: "登出", closed: "關閉", previous: "‹ 上一頁", next: "下一頁 ›", readaloud: "朗讀", save: "保存", submit: "提交", approve: "批准", read: "閱讀",
     submittedwork: "已提交作業", nowriting: "還未提交寫作。", savedbooks: "已保存的繪本", nobooks: "還未保存繪本。",
     writing_sample: "我的校園故事", writing_draft: "今天小息時，我在操場看見同學互相幫忙，覺得校園很溫暖。", story_seed: "輸入你的描述 (Prompt)", style: "選擇風格", language: "語言", generate: "🪄 生成繪本", exportpdf: "匯出 PDF", saveto: "保存到作品集", submitted: "已提交",
-    close: "關閉", page: "頁", pending: "待審", score: "分數"
+    close: "關閉", page: "頁", pending: "待審", score: "分數",
+    aiusage: "AI 用量", workspace: "工作區", role: "角色", student: "學生", teacher: "教師", admin: "管理員",
+    readtext: "朗讀內容", lateststorybook: "最新繪本", waiting: "等待中", no_pages_yet: "尚無頁面", pages: "頁",
+    prompt: "提示詞", image_not_ready: "圖片未就緒", writing: "作文",
+    question: "問題", answer: "回答", time: "時間", mandarin: "普通話", cantonese: "廣東話", voice: "語音", voicepick: "聲線"
   }
 };
 
@@ -29,6 +37,8 @@ const state = {
   page: "dashboard",
   tool: "writing",
   language: localStorage.getItem("ai-school-language") || "zh",
+  voiceLanguage: localStorage.getItem("ai-school-voice-language") || "cantonese",
+  selectedVoiceURI: localStorage.getItem("ai-school-voice-uri") || "",
   storyMessage: "",
   storyPageIndex: 0,
   currentStoryPages: [],
@@ -37,7 +47,11 @@ const state = {
   portfolioBookId: "",
   portfolioPageIndex: 0,
   workReaderId: "",
-  workReaderPageIndex: 0
+  workReaderPageIndex: 0,
+  historyPersona: "玄奘",
+  readingText: "",
+  activeSentenceIndex: -1,
+  readingSessionId: 0
 };
 
 function t(key) {
@@ -150,11 +164,18 @@ async function api(path, options = {}) {
 async function load() {
   if (!state.user) return renderLogin();
   state.data = await api("/api/bootstrap");
+  if ("speechSynthesis" in window && !window.__aiVoiceHooked) {
+    window.__aiVoiceHooked = true;
+    window.speechSynthesis.addEventListener("voiceschanged", () => {
+      if (!state.user) return;
+      renderApp();
+    });
+  }
   renderApp();
 }
 
 function roleLabel(role) {
-  return { student: "Student", teacher: "Teacher", admin: "Admin" }[role] || role;
+  return { student: t("student"), teacher: t("teacher"), admin: t("admin") }[role] || role;
 }
 
 function statusChip(status) {
@@ -168,26 +189,144 @@ function storyTitleFromText(text) {
   return clean.length > 18 ? `${clean.slice(0, 18)}...` : clean;
 }
 
+function splitSentences(text) {
+  const source = String(text || "").trim();
+  if (!source) return [];
+  return source.match(/[^。！？!?；;\n]+[。！？!?；;]?/g)?.map(item => item.trim()).filter(Boolean) || [source];
+}
+
+function renderReadableText(text) {
+  const sentences = splitSentences(text);
+  if (!sentences.length) return `<p></p>`;
+  return `<p class="reader-sentences">${sentences.map((sentence, index) => {
+    const active = state.readingText === String(text || "") && state.activeSentenceIndex === index ? " active" : "";
+    return `<span class="reader-sentence${active}" data-sentence-index="${index}">${html(sentence)}</span>`;
+  }).join("")}</p>`;
+}
+
+function clearReadingHighlight() {
+  state.readingText = "";
+  state.activeSentenceIndex = -1;
+}
+
+function getChineseVoiceOptions() {
+  if (!("speechSynthesis" in window)) return [];
+  const voices = window.speechSynthesis.getVoices();
+  const normalize = value => String(value || "").toLowerCase();
+  return voices
+    .filter(voice => {
+      const lang = normalize(voice.lang);
+      return lang.startsWith("zh") || lang.startsWith("yue") || lang.startsWith("cmn");
+    })
+    .sort((a, b) => {
+      const aLang = String(a.lang || "").toLowerCase();
+      const bLang = String(b.lang || "").toLowerCase();
+      const priority = lang => {
+        if (state.voiceLanguage === "mandarin") {
+          if (lang.includes("zh-tw") || lang.includes("cmn-hant")) return 0;
+          if (lang.includes("zh-cn") || lang.includes("cmn-hans")) return 1;
+          if (lang.includes("zh")) return 2;
+          return 3;
+        }
+        if (lang.includes("zh-hk") || lang.includes("yue")) return 0;
+        if (lang.includes("zh")) return 1;
+        return 2;
+      };
+      const diff = priority(aLang) - priority(bLang);
+      return diff !== 0 ? diff : String(a.name || "").localeCompare(String(b.name || ""));
+    });
+}
+
+function speechPreferences() {
+  if (state.voiceLanguage === "mandarin") {
+    return {
+      langs: ["zh-TW", "cmn-Hant-TW", "zh-CN", "cmn-Hans-CN"],
+      names: ["Ting-Ting", "Mei-Jia", "Sinji", "Sin-ji", "Yating", "HanHan", "Mandarin"]
+    };
+  }
+  return {
+    langs: ["zh-HK", "yue-HK", "zh-yue"],
+    names: ["Sinji", "Sin-ji", "Mei-Jia", "Cantonese", "HiuGaai"]
+  };
+}
+
+function pickSpeechVoice() {
+  if (!("speechSynthesis" in window)) return null;
+  const voices = window.speechSynthesis.getVoices();
+  if (!voices.length) return null;
+
+  if (state.selectedVoiceURI) {
+    const selected = voices.find(voice => voice.voiceURI === state.selectedVoiceURI);
+    if (selected) return selected;
+  }
+
+  const preferences = speechPreferences();
+  const normalize = value => String(value || "").toLowerCase();
+  const preferredByName = voices.find(voice => preferences.names.some(name => normalize(voice.name).includes(normalize(name))));
+  if (preferredByName) return preferredByName;
+
+  const preferredByLang = voices.find(voice => preferences.langs.includes(voice.lang));
+  if (preferredByLang) return preferredByLang;
+
+  const genericChinese = voices.find(voice => normalize(voice.lang).startsWith("zh") || normalize(voice.lang).startsWith("yue"));
+  return genericChinese || null;
+}
+
 function readStoryText(text) {
   if (!("speechSynthesis" in window)) {
     alert("This browser does not support text reading.");
     return;
   }
   if (window.speechSynthesis.speaking) {
-    window.speechSynthesis.cancel();
+    stopStoryText();
     return;
   }
-  const utterance = new SpeechSynthesisUtterance(String(text || ""));
-  utterance.lang = "zh-HK";
-  utterance.rate = 0.9;
-  utterance.pitch = 1;
-  window.speechSynthesis.speak(utterance);
+  const sentences = splitSentences(text);
+  if (!sentences.length) return;
+  const readingText = String(text || "");
+  const sessionId = state.readingSessionId + 1;
+  state.readingSessionId = sessionId;
+  state.readingText = readingText;
+  state.activeSentenceIndex = 0;
+  window.speechSynthesis.cancel();
+  const speakSentence = index => {
+    if (state.readingSessionId !== sessionId) return;
+    if (index >= sentences.length) {
+      clearReadingHighlight();
+      renderApp();
+      return;
+    }
+    state.readingText = readingText;
+    state.activeSentenceIndex = index;
+    renderApp();
+    const utterance = new SpeechSynthesisUtterance(sentences[index]);
+    const voice = pickSpeechVoice();
+    utterance.voice = voice;
+    utterance.lang = voice?.lang || (state.voiceLanguage === "mandarin" ? "zh-TW" : "zh-HK");
+    utterance.rate = state.voiceLanguage === "mandarin" ? 0.92 : 0.9;
+    utterance.pitch = 1;
+    utterance.onend = () => {
+      if (state.readingSessionId !== sessionId) return;
+      speakSentence(index + 1);
+    };
+    utterance.onerror = () => {
+      if (state.readingSessionId !== sessionId) return;
+      clearReadingHighlight();
+      renderApp();
+    };
+    window.speechSynthesis.speak(utterance);
+  };
+  renderApp();
+  speakSentence(0);
 }
 
 function stopStoryText() {
+  state.readingSessionId += 1;
   if ("speechSynthesis" in window) {
     window.speechSynthesis.cancel();
   }
+  clearReadingHighlight();
+  renderApp();
 }
 
 function refreshStoryOutputs() {
@@ -346,13 +485,14 @@ function renderNav() {
 
 function renderApp() {
   const nav = renderNav();
-  const roleSub = state.user.role === "student" ? `${state.user.className || "P5A"} · ${state.user.level || "P5"}` : state.user.role === "teacher" ? `${state.user.className || "P5A"} 教師` : "學校管理員";
+  const voiceOptions = getChineseVoiceOptions();
+  const roleSub = state.user.role === "student" ? `${state.user.className || "P5A"} · ${state.user.level || "P5"}` : state.user.role === "teacher" ? `${state.user.className || "P5A"} ${t("teacher")}` : t("admin");
   $("#app").innerHTML = `
     <div class="shell">
       <aside class="sidebar">
         <div class="brand">
           <div class="mark">🤖</div>
-          <div><h1>AI學習平台</h1><p>${roleLabel(state.user.role)} workspace</p></div>
+          <div><h1>AI學習平台</h1><p>${roleLabel(state.user.role)} ${t("workspace")}</p></div>
         </div>
         <div class="sidebar-user">
           <div class="avatar">${state.user.name.slice(0, 1)}</div>
@@ -365,7 +505,7 @@ function renderApp() {
           ${nav}
         </nav>
         <div class="sidebar-bottom">
-          <div class="token-bar-label"><span>AI 用量</span><strong>62%</strong></div>
+          <div class="token-bar-label"><span>${t("aiusage")}</span><strong>62%</strong></div>
           <div class="token-bar"><div class="token-bar-fill"></div></div>
           <div style="margin-top:16px;display:flex;gap:6px;font-size:11px">
             <button class="ghost" id="langEn" style="flex:1;min-height:28px;padding:0;${state.language === "en" ? "background:rgba(91,79,232,0.2);" : ""}" title="English">EN</button>
@@ -377,7 +517,18 @@ function renderApp() {
       <main class="main">
         <div class="topbar">
           <div class="page-title"><h2>${pageTitle()}</h2><p>${pageSubtitle()}</p></div>
-          <div class="user-pill"><span>${state.user.name}</span><div class="avatar">${state.user.name.slice(0, 1)}</div></div>
+          <div class="topbar-controls">
+            <div class="voice-selector-topbar">
+              <span class="voice-label">${t("voice")}:</span>
+              <button class="mini ${state.voiceLanguage === "cantonese" ? "active" : ""}" type="button" data-voice-lang="cantonese">${t("cantonese")}</button>
+              <button class="mini ${state.voiceLanguage === "mandarin" ? "active" : ""}" type="button" data-voice-lang="mandarin">${t("mandarin")}</button>
+              <select class="voice-picker" data-voice-picker title="${t("voicepick")}">
+                <option value="">${t("voicepick")}</option>
+                ${voiceOptions.map(voice => `<option value="${html(voice.voiceURI)}" ${state.selectedVoiceURI === voice.voiceURI ? "selected" : ""}>${html(`${voice.name} (${voice.lang})`)}</option>`).join("")}
+              </select>
+            </div>
+            <div class="user-pill"><span>${state.user.name}</span><div class="avatar">${state.user.name.slice(0, 1)}</div></div>
+          </div>
         </div>
         <div id="view">${renderView()}</div>
       </main>
@@ -400,6 +551,23 @@ function renderApp() {
     localStorage.setItem("ai-school-language", "zh");
     renderApp();
   });
+
+  document.querySelectorAll("[data-voice-lang]").forEach(button => {
+    button.addEventListener("click", () => {
+      state.voiceLanguage = button.dataset.voiceLang;
+      localStorage.setItem("ai-school-voice-language", state.voiceLanguage);
+      renderApp();
+    });
+  });
+
+  document.querySelectorAll("[data-voice-picker]").forEach(select => {
+    select.addEventListener("change", event => {
+      state.selectedVoiceURI = event.target.value || "";
+      localStorage.setItem("ai-school-voice-uri", state.selectedVoiceURI);
+      renderApp();
+    });
+  });
+
   $("#logout").addEventListener("click", () => {
     localStorage.removeItem("ai-school-user");
     state.user = null;
@@ -488,7 +656,7 @@ function renderAssignment(item) {
 function renderStudio() {
   return `
     <div class="tabs">
-      ${["writing", "storybook", "history"].map(id => `<button class="${state.tool === id ? "active" : ""}" data-tool="${id}">${{ writing: "Writing", storybook: "Storybook", history: "History" }[id]}</button>`).join("")}
+      ${["writing", "storybook", "history"].map(id => `<button class="${state.tool === id ? "active" : ""}" data-tool="${id}">${{ writing: t("writingassistant"), storybook: t("storybook"), history: t("history") }[id]}</button>`).join("")}
     </div>
     ${state.tool === "writing" ? renderWritingTool() : state.tool === "storybook" ? renderStoryTool() : renderHistoryTool()}`;
 }
@@ -575,7 +743,8 @@ function renderHistoryTool() {
       </form>
       <div class="card">
         <h3>Conversation</h3>
-        <div class="chat-log" id="chatResult">${state.data.conversations.slice(0, 6).map(renderChat).join("") || `<div class="empty">No conversations yet.</div>`}</div>
+        ${renderHistoryPersonaTabs()}
+        <div class="chat-log" id="chatResult">${renderHistoryConversations()}</div>
       </div>
     </section>`;
 }
@@ -598,15 +767,24 @@ function renderStoryPager(pages) {
   if (!pages.length) return `<div class="empty">Generate a storybook to create consistent pages and image prompts.</div>`;
   const index = Math.min(Math.max(state.storyPageIndex, 0), pages.length - 1);
   const page = pages[index];
+  const voiceOptions = getChineseVoiceOptions();
   return `
     <div class="story-pager">
       <div class="story-pager-head">
-        <button class="ghost" type="button" data-story-prev ${index === 0 ? "disabled" : ""}>‹ Previous</button>
-        <span class="chip">Page ${index + 1} / ${pages.length}</span>
-        <button class="ghost" type="button" data-story-next ${index === pages.length - 1 ? "disabled" : ""}>Next ›</button>
+        <button class="ghost" type="button" data-story-prev ${index === 0 ? "disabled" : ""}>${t("previous")}</button>
+        <span class="chip">${t("page")} ${index + 1} / ${pages.length}</span>
+        <button class="ghost" type="button" data-story-next ${index === pages.length - 1 ? "disabled" : ""}>${t("next")}</button>
       </div>
       <div class="story-read-row">
-        <button class="secondary" type="button" data-read-story>Read text</button>
+        <button class="secondary" type="button" data-read-story>${t("readtext")}</button>
+        <div class="voice-selector">
+          <button class="mini ${state.voiceLanguage === "cantonese" ? "active" : ""}" type="button" data-voice-lang="cantonese">${t("cantonese")}</button>
+          <button class="mini ${state.voiceLanguage === "mandarin" ? "active" : ""}" type="button" data-voice-lang="mandarin">${t("mandarin")}</button>
+        </div>
+        <select class="voice-picker" data-voice-picker title="${t("voicepick")}">
+          <option value="">${t("voicepick")}</option>
+          ${voiceOptions.map(voice => `<option value="${html(voice.voiceURI)}" ${state.selectedVoiceURI === voice.voiceURI ? "selected" : ""}>${html(`${voice.name} (${voice.lang})`)}</option>`).join("")}
+        </select>
       </div>
       ${renderBookPages([page])}
     </div>`;
@@ -626,8 +804,77 @@ function renderStoryText(pages) {
     </article>`).join("");
 }
 
+function formatConversationTime(value) {
+  const date = new Date(value || Date.now());
+  if (Number.isNaN(date.getTime())) return "";
+  const locale = state.language === "en" ? "en-US" : "zh-HK";
+  return date.toLocaleString(locale, {
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit"
+  });
+}
+
 function renderChat(chat) {
-  return `<div class="message"><strong>${chat.persona}</strong><p>${chat.reply}</p><p class="muted">${chat.sourceTip}</p></div>`;
+  return `<div class="message"><strong>${chat.persona}</strong><p><strong>${t("question")}:</strong> ${html(chat.question || "")}</p><p><strong>${t("answer")}:</strong> ${html(chat.reply || "")}</p><p class="muted">${chat.sourceTip ? html(chat.sourceTip) : ""}</p><p class="muted chat-time">${t("time")}: ${formatConversationTime(chat.createdAt)}</p></div>`;
+}
+
+function getHistoryPersonas() {
+  const conversations = state.data.conversations || [];
+  const personas = new Set();
+  conversations.forEach(chat => {
+    if (chat.persona) personas.add(chat.persona);
+  });
+  return Array.from(personas).sort();
+}
+
+function renderHistoryPersonaTabs() {
+  const personas = getHistoryPersonas();
+  if (!personas.length) return "";
+  return `
+    <div class="history-tabs">
+      ${personas.map(persona => `
+        <button class="history-tab ${state.historyPersona === persona ? "active" : ""}" data-history-persona="${html(persona)}">
+          ${persona}
+        </button>
+      `).join("")}
+    </div>
+  `;
+}
+
+function renderHistoryConversations() {
+  const conversations = state.data.conversations || [];
+  const selectedPersona = state.historyPersona;
+  
+  // Filter conversations for selected persona
+  const personaConversations = conversations.filter(chat => chat.persona === selectedPersona).slice(0, 30);
+  
+  if (!personaConversations.length) {
+    return `<div class="empty">No conversations with ${selectedPersona} yet.</div>`;
+  }
+
+  // Render chat bubbles for selected persona
+  return `
+    <div class="history-chat-bubbles">
+      ${personaConversations.map((chat, index) => `
+        <div class="chat-bubble user-message">
+          <div class="chat-bubble-content">
+            <p>${html(chat.question || "")}</p>
+            <span class="chat-bubble-time">${formatConversationTime(chat.createdAt)}</span>
+          </div>
+        </div>
+        <div class="chat-bubble ai-message">
+          <div class="chat-bubble-content">
+            <p>${html(chat.reply || "")}</p>
+            ${chat.sourceTip ? `<p class="chat-source-tip">${html(chat.sourceTip)}</p>` : ""}
+            <span class="chat-bubble-time">${formatConversationTime(chat.createdAt)}</span>
+          </div>
+        </div>
+      `).join("")}
+    </div>
+  `;
 }
 
 function renderSavedStoryBook(book) {
@@ -635,18 +882,22 @@ function renderSavedStoryBook(book) {
   const cover = pages.find(page => page.imageUrl) || pages[0];
   const submitted = book.status === "submitted" || Boolean(book.submittedWorkId);
   return `
-    <article class="saved-book">
-      ${cover?.imageUrl ? `<img class="saved-book-cover" src="${html(cover.imageUrl)}" alt="${html(book.title)} cover">` : `<div class="saved-book-cover placeholder">No image yet</div>`}
-      <div class="saved-book-body">
-        <div class="saved-book-head">
-          <h4>${html(book.title)}</h4>
+    <article class="saved-book-card">
+      <div class="saved-book-cover-section">
+        ${cover?.imageUrl ? `<img class="saved-book-cover-large" src="${html(cover.imageUrl)}" alt="${html(book.title)} cover">` : `<div class="saved-book-cover-large placeholder"><div>📖</div><p>No image yet</p></div>`}
+      </div>
+      <div class="saved-book-info">
+        <div class="saved-book-header">
+          <div>
+            <h4>${html(book.title)}</h4>
+            <p class="book-meta">${pages.length} ${t("pages")} · ${new Date(book.updatedAt || book.createdAt).toLocaleDateString()}</p>
+          </div>
           ${submitted ? `<span class="chip ok">Submitted</span>` : ""}
         </div>
-        <p>${pages.length} pages · ${new Date(book.updatedAt || book.createdAt).toLocaleDateString()}</p>
-        ${book.prompt ? `<div class="saved-book-prompt"><strong>Prompt</strong><span>${html(book.prompt)}</span></div>` : ""}
-        <p>${html(pages[0]?.text || "")}</p>
+        ${book.prompt ? `<div class="saved-book-prompt"><strong>${t("prompt")}:</strong> ${html(book.prompt)}</div>` : ""}
+        <p class="first-page-excerpt">${html(pages[0]?.text || "")}</p>
         <div class="saved-book-actions">
-          <button class="secondary" type="button" data-read-saved-book="${book.id}">Read</button>
+          <button class="secondary" type="button" data-read-saved-book="${book.id}">${t("read")}</button>
           <button class="primary" type="button" data-submit-saved-book="${book.id}" ${submitted ? "disabled" : ""}>${submitted ? "Submitted" : "Submit"}</button>
         </div>
       </div>
@@ -660,24 +911,35 @@ function renderSavedBookReader() {
   if (!pages.length) return "";
   const index = Math.min(Math.max(state.portfolioPageIndex, 0), pages.length - 1);
   const page = pages[index];
+  const voiceOptions = getChineseVoiceOptions();
   return `
     <div class="reader-overlay" data-saved-reader-overlay>
       <section class="card saved-reader reader-dialog">
         <div class="section-head">
           <div>
             <h3>${html(book.title)}</h3>
-            <p class="muted">Page ${index + 1} / ${pages.length}</p>
+            <p class="muted">${t("page")} ${index + 1} / ${pages.length}</p>
           </div>
-          <button class="ghost" type="button" data-close-saved-reader>Close</button>
+          <button class="ghost" type="button" data-close-saved-reader>${t("close")}</button>
         </div>
         <article class="saved-reader-page">
-          ${page.imageUrl ? `<img class="saved-reader-image" src="${html(page.imageUrl)}" alt="${html(book.title)} page ${index + 1}">` : `<div class="saved-reader-image placeholder">Image not ready</div>`}
+          ${page.imageUrl ? `<img class="saved-reader-image" src="${html(page.imageUrl)}" alt="${html(book.title)} ${t("page")} ${index + 1}">` : `<div class="saved-reader-image placeholder">${t("image_not_ready")}</div>`}
           <div class="saved-reader-text">
-            <p>${html(page.text)}</p>
+            ${renderReadableText(page.text)}
             <div class="saved-reader-actions">
-              <button class="ghost" type="button" data-saved-prev ${index === 0 ? "disabled" : ""}>‹ Previous</button>
-              <button class="secondary" type="button" data-read-saved-page>Read aloud</button>
-              <button class="ghost" type="button" data-saved-next ${index === pages.length - 1 ? "disabled" : ""}>Next ›</button>
+              <button class="ghost" type="button" data-saved-prev ${index === 0 ? "disabled" : ""}>${t("previous")}</button>
+              <div class="reader-voice-controls">
+                <button class="secondary" type="button" data-read-saved-page>${t("readaloud")}</button>
+                <div class="voice-selector">
+                  <button class="mini ${state.voiceLanguage === "cantonese" ? "active" : ""}" type="button" data-voice-lang="cantonese">${t("cantonese")}</button>
+                  <button class="mini ${state.voiceLanguage === "mandarin" ? "active" : ""}" type="button" data-voice-lang="mandarin">${t("mandarin")}</button>
+                </div>
+                <select class="voice-picker" data-voice-picker title="${t("voicepick")}">
+                  <option value="">${t("voicepick")}</option>
+                  ${voiceOptions.map(voice => `<option value="${html(voice.voiceURI)}" ${state.selectedVoiceURI === voice.voiceURI ? "selected" : ""}>${html(`${voice.name} (${voice.lang})`)}</option>`).join("")}
+                </select>
+              </div>
+              <button class="ghost" type="button" data-saved-next ${index === pages.length - 1 ? "disabled" : ""}>${t("next")}</button>
             </div>
           </div>
         </article>
@@ -692,24 +954,35 @@ function renderWorkReader() {
   if (!pages.length) return "";
   const index = Math.min(Math.max(state.workReaderPageIndex, 0), pages.length - 1);
   const page = pages[index];
+  const voiceOptions = getChineseVoiceOptions();
   return `
     <div class="reader-overlay" data-work-reader-overlay>
       <section class="card saved-reader reader-dialog">
         <div class="section-head">
           <div>
             <h3>${html(work.title)}</h3>
-            <p class="muted">Page ${index + 1} / ${pages.length}</p>
+            <p class="muted">${t("page")} ${index + 1} / ${pages.length}</p>
           </div>
-          <button class="ghost" type="button" data-close-work-reader>Close</button>
+          <button class="ghost" type="button" data-close-work-reader>${t("close")}</button>
         </div>
         <article class="saved-reader-page">
-          ${page.imageUrl ? `<img class="saved-reader-image" src="${html(page.imageUrl)}" alt="${html(work.title)} page ${index + 1}">` : `<div class="saved-reader-image placeholder">Writing</div>`}
+          ${page.imageUrl ? `<img class="saved-reader-image" src="${html(page.imageUrl)}" alt="${html(work.title)} ${t("page")} ${index + 1}">` : `<div class="saved-reader-image placeholder">${t("writing")}</div>`}
           <div class="saved-reader-text">
-            <p>${html(page.text)}</p>
+            ${renderReadableText(page.text)}
             <div class="saved-reader-actions">
-              <button class="ghost" type="button" data-work-prev ${index === 0 ? "disabled" : ""}>‹ Previous</button>
-              <button class="secondary" type="button" data-read-work-page>Read aloud</button>
-              <button class="ghost" type="button" data-work-next ${index === pages.length - 1 ? "disabled" : ""}>Next ›</button>
+              <button class="ghost" type="button" data-work-prev ${index === 0 ? "disabled" : ""}>${t("previous")}</button>
+              <div class="reader-voice-controls">
+                <button class="secondary" type="button" data-read-work-page>${t("readaloud")}</button>
+                <div class="voice-selector">
+                  <button class="mini ${state.voiceLanguage === "cantonese" ? "active" : ""}" type="button" data-voice-lang="cantonese">${t("cantonese")}</button>
+                  <button class="mini ${state.voiceLanguage === "mandarin" ? "active" : ""}" type="button" data-voice-lang="mandarin">${t("mandarin")}</button>
+                </div>
+                <select class="voice-picker" data-voice-picker title="${t("voicepick")}">
+                  <option value="">${t("voicepick")}</option>
+                  ${voiceOptions.map(voice => `<option value="${html(voice.voiceURI)}" ${state.selectedVoiceURI === voice.voiceURI ? "selected" : ""}>${html(`${voice.name} (${voice.lang})`)}</option>`).join("")}
+                </select>
+              </div>
+              <button class="ghost" type="button" data-work-next ${index === pages.length - 1 ? "disabled" : ""}>${t("next")}</button>
             </div>
           </div>
         </article>
@@ -720,15 +993,33 @@ function renderWorkReader() {
 function renderPortfolio() {
   const works = state.data.works.filter(work => work.studentId === state.user.id);
   const storyBooks = (state.data.storyBooks || []).filter(book => book.studentId === state.user.id);
-  return `${renderWorkReader()}${renderSavedBookReader()}<section class="grid two"><div class="card"><h3>Submitted Work</h3><div class="list" style="margin-top:14px">${works.map(renderWork).join("") || `<div class="empty">No writing submitted yet.</div>`}</div></div><div class="card"><h3>Saved Storybooks</h3><div class="saved-book-list" style="margin-top:14px">${storyBooks.map(renderSavedStoryBook).join("") || `<div class="empty">No storybooks saved yet.</div>`}</div></div></section>`;
+  return `${renderWorkReader()}${renderSavedBookReader()}<section class="grid two"><div class="card"><h3>${t("submittedwork")}</h3><div class="list" style="margin-top:14px">${works.map(renderWork).join("") || `<div class="empty">${t("nowriting")}</div>`}</div></div><div class="card"><h3>${t("savedbooks")}</h3><div class="saved-book-list" style="margin-top:14px">${storyBooks.map(renderSavedStoryBook).join("") || `<div class="empty">${t("nobooks")}</div>`}</div></div></section>`;
 }
 
 function renderWork(work) {
-  return `<article class="item"><div class="section-head"><h4>${work.title}</h4>${statusChip(work.status)}</div><p>${work.content}</p><div class="toolbar" style="margin-top:10px"><button class="secondary" type="button" data-read-work="${work.id}">閱讀</button><span class="chip">Score ${work.score || "-"}</span><span class="chip">${new Date(work.updatedAt).toLocaleDateString()}</span></div><p style="margin-top:8px">${work.teacherComment || work.feedback || ""}</p></article>`;
+  const score = work.score || 0;
+  const scoreColor = score >= 80 ? "ok" : score >= 60 ? "warn" : "danger";
+  const date = new Date(work.updatedAt);
+  const formattedDate = `${date.getMonth() + 1}/${date.getDate()}/${date.getFullYear()}`;
+  
+  // Get image for storybook submissions
+  let imageHtml = "";
+  if (work.type === "storybook" && work.storyBookId) {
+    const storyBook = state.data.storyBooks?.find(book => book.id === work.storyBookId);
+    const firstPage = storyBook?.pageIds?.[0] ? state.data.bookPages.find(p => p.id === storyBook.pageIds[0]) : null;
+    if (firstPage?.imageUrl) {
+      imageHtml = `<div class="work-image-section"><img class="work-thumbnail" src="${html(firstPage.imageUrl)}" alt="${html(work.title)}"></div>`;
+    } else if (firstPage) {
+      imageHtml = `<div class="work-image-section"><div class="work-thumbnail placeholder">📖</div></div>`;
+    }
+  }
+  
+  const hasImage = imageHtml ? "has-image" : "";
+  return `<article class="work-item ${hasImage}">${imageHtml}<div class="work-content-section"><div class="work-header"><div class="work-title-section"><h4>${work.title}</h4></div><div class="work-meta"><div class="work-score score-${scoreColor}">${score}</div><div class="work-date">${formattedDate}</div></div></div><p class="work-content">${work.content}</p><div class="work-footer"><button class="secondary" type="button" data-read-work="${work.id}">${t("read")}</button>${work.teacherComment || work.feedback ? `<div class="work-feedback">${work.teacherComment || work.feedback}</div>` : ""}</div></div></article>`;
 }
 
 function renderReview() {
-  return `<section class="card"><div class="section-head"><h3>Student Submissions</h3><span class="chip warn">${state.data.summary.pendingReview} pending</span></div><div class="list">${state.data.works.map(work => `<article class="item"><div class="section-head"><h4>${work.title}</h4>${statusChip(work.status)}</div><p>${work.content}</p><p>${work.feedback || ""}</p><div class="toolbar" style="margin-top:10px"><button class="secondary" type="button" data-read-work="${work.id}">閱讀</button><input data-score="${work.id}" type="number" min="0" max="100" value="${work.score || 75}" style="max-width:120px"><input data-comment="${work.id}" value="${work.teacherComment || "Good progress. Add more evidence and details."}"><button class="primary" data-review="${work.id}">Approve</button></div></article>`).join("")}</div></section>`;
+  return `<section class="card"><div class="section-head"><h3>Student Submissions</h3><span class="chip warn">${state.data.summary.pendingReview} ${t("pending")}</span></div><div class="list">${state.data.works.map(work => `<article class="item"><div class="section-head"><h4>${work.title}</h4>${statusChip(work.status)}</div><p>${work.content}</p><p>${work.feedback || ""}</p><div class="toolbar" style="margin-top:10px"><button class="secondary" type="button" data-read-work="${work.id}">${t("read")}</button><input data-score="${work.id}" type="number" min="0" max="100" value="${work.score || 75}" style="max-width:120px"><input data-comment="${work.id}" value="${work.teacherComment || "Good progress. Add more evidence and details."}"><button class="primary" data-review="${work.id}">${t("approve")}</button></div></article>`).join("")}</div></section>`;
 }
 
 function renderClass() {
@@ -1013,6 +1304,7 @@ async function generateStoryImages(pages) {
     const form = new FormData(event.currentTarget);
     const button = $("#historyAskButton");
     const status = $("#historyStatus");
+    const selectedPersona = form.get("persona");
     button.disabled = true;
     button.textContent = "Asking...";
     status.textContent = "";
@@ -1021,12 +1313,13 @@ async function generateStoryImages(pages) {
         method: "POST",
         body: JSON.stringify({
           studentId: state.user.id,
-          persona: form.get("persona"),
+          persona: selectedPersona,
           question: form.get("question")
         })
       });
       await refresh();
-      $("#chatResult").innerHTML = renderChat(result.conversation) + $("#chatResult").innerHTML;
+      state.historyPersona = selectedPersona;
+      renderApp();
       status.innerHTML = `<span class="chip ok">Answered · ${result.conversation.source || "local"}</span>`;
     } catch (error) {
       status.textContent = error.message;
@@ -1034,6 +1327,13 @@ async function generateStoryImages(pages) {
       button.disabled = false;
       button.textContent = "Ask historical persona";
     }
+  });
+
+  document.querySelectorAll("[data-history-persona]").forEach(btn => {
+    btn.addEventListener("click", () => {
+      state.historyPersona = btn.dataset.historyPersona;
+      renderApp();
+    });
   });
 
   document.querySelectorAll("[data-review]").forEach(button => {
