@@ -12,7 +12,16 @@ const i18n = {
     aiusage: "AI Usage", workspace: "workspace", role: "Role", student: "Student", teacher: "Teacher", admin: "Admin",
     readtext: "Read text", lateststorybook: "Latest storybook", waiting: "Waiting", no_pages_yet: "No pages yet", pages: "pages",
     prompt: "Prompt", image_not_ready: "Image not ready", writing: "Writing",
-    question: "Question", answer: "Answer", time: "Time", mandarin: "Mandarin (普通话)", cantonese: "Cantonese (廣東話)", voice: "Voice", voicepick: "Voice option"
+    question: "Question", answer: "Answer", time: "Time", mandarin: "Mandarin (普通话)", cantonese: "Cantonese (廣東話)", voice: "Voice", voicepick: "Voice option",
+    no_image_yet: "No image yet", savedto_done: "Saved to portfolio", studentsubmissions: "Student Submissions",
+    subtitle_dashboard: "Live overview of learning activity and school platform health.",
+    subtitle_studio: "Create writing, picture books, animated scripts and historical inquiry.",
+    subtitle_portfolio: "Collected writing, story pages and teacher feedback.",
+    subtitle_review: "Monitor progress, review submissions and approve filtered work.",
+    subtitle_class: "Class-level learning evidence and AI usage records.",
+    subtitle_users: "Manage student, teacher and administrator accounts.",
+    subtitle_ai: "Configure Sub2API or another OpenAI-compatible provider securely on the backend.",
+    subtitle_compliance: "Safety filters, audit trail, data handling and export readiness."
   },
   zh: {
     signin: "登入", chooserole: "選擇一個校園角色來開啟對應的工作區。", password: "密碼", enterplatform: "進入平台",
@@ -27,7 +36,16 @@ const i18n = {
     aiusage: "AI 用量", workspace: "工作區", role: "角色", student: "學生", teacher: "教師", admin: "管理員",
     readtext: "朗讀內容", lateststorybook: "最新繪本", waiting: "等待中", no_pages_yet: "尚無頁面", pages: "頁",
     prompt: "提示詞", image_not_ready: "圖片未就緒", writing: "作文",
-    question: "問題", answer: "回答", time: "時間", mandarin: "普通話", cantonese: "廣東話", voice: "語音", voicepick: "聲線"
+    question: "問題", answer: "回答", time: "時間", mandarin: "普通話", cantonese: "廣東話", voice: "語音", voicepick: "聲線",
+    no_image_yet: "尚無圖片", savedto_done: "已保存到作品集", studentsubmissions: "學生作業",
+    subtitle_dashboard: "學習活動及學校平台狀態即時概覽。",
+    subtitle_studio: "創作作文、繪本、動畫劇本及歷史探究。",
+    subtitle_portfolio: "作文、繪本頁面及教師批改。",
+    subtitle_review: "監察進度、批改作業及審核篩選作品。",
+    subtitle_class: "班級學習記錄及 AI 使用情況。",
+    subtitle_users: "管理學生、教師及管理員帳號。",
+    subtitle_ai: "在後端安全地設定 Sub2API 或其他 OpenAI 相容供應商。",
+    subtitle_compliance: "安全篩選器、審計記錄、數據處理及匯出準備。"
   }
 };
 
@@ -592,16 +610,7 @@ function pageTitle() {
 }
 
 function pageSubtitle() {
-  return {
-    dashboard: "Live overview of learning activity and school platform health.",
-    studio: "Create writing, picture books, animated scripts and historical inquiry.",
-    portfolio: "Collected writing, story pages and teacher feedback.",
-    review: "Monitor progress, review submissions and approve filtered work.",
-    class: "Class-level learning evidence and AI usage records.",
-    users: "Manage student, teacher and administrator accounts.",
-    ai: "Configure Sub2API or another OpenAI-compatible provider securely on the backend.",
-    compliance: "Safety filters, audit trail, data handling and export readiness."
-  }[state.page];
+  return t("subtitle_" + state.page);
 }
 
 function renderView() {
@@ -709,15 +718,15 @@ function renderStoryTool() {
         <label class="field compact-language"><span>Language</span><select name="language"><option>繁體中文</option><option>粵語口語</option><option>English</option></select></label>
         <button class="primary story-generate-btn" id="storyGenerateButton" type="button" data-generate-story>🪄 生成繪本</button>
         <div class="story-actions">
-          <button class="secondary" type="button" data-save-story ${latestPages.length && currentStoryIsSaved() ? "disabled" : ""}>${latestPages.length && currentStoryIsSaved() ? "Saved to portfolio" : "Save to portfolio"}</button>
-          <button class="secondary" type="button" data-export-pdf>Export PDF</button>
+          <button class="secondary" type="button" data-save-story ${latestPages.length && currentStoryIsSaved() ? "disabled" : ""}>${latestPages.length && currentStoryIsSaved() ? t("savedto_done") : t("saveto")}</button>
+          <button class="secondary" type="button" data-export-pdf>${t("exportpdf")}</button>
           <div class="error" id="storyStatus">${state.storyMessage}</div>
         </div>
       </form>
       <div class="card">
         <div class="section-head">
           <h3 id="storyPreviewTitle">${storyTitle}</h3>
-          <span class="chip ${latestPages.length ? "ok" : "warn"}">${latestPages.length ? "Latest storybook" : "Waiting"}</span>
+          <span class="chip ${latestPages.length ? "ok" : "warn"}">${latestPages.length ? t("lateststorybook") : t("waiting")}</span>
         </div>
         <div id="storyResult">${renderStoryPager(latestPages)}</div>
       </div>
@@ -884,7 +893,7 @@ function renderSavedStoryBook(book) {
   return `
     <article class="saved-book-card">
       <div class="saved-book-cover-section">
-        ${cover?.imageUrl ? `<img class="saved-book-cover-large" src="${html(cover.imageUrl)}" alt="${html(book.title)} cover">` : `<div class="saved-book-cover-large placeholder"><div>📖</div><p>No image yet</p></div>`}
+        ${cover?.imageUrl ? `<img class="saved-book-cover-large" src="${html(cover.imageUrl)}" alt="${html(book.title)} cover">` : `<div class="saved-book-cover-large placeholder"><div>📖</div><p>${t("no_image_yet")}</p></div>`}
       </div>
       <div class="saved-book-info">
         <div class="saved-book-header">
@@ -892,13 +901,13 @@ function renderSavedStoryBook(book) {
             <h4>${html(book.title)}</h4>
             <p class="book-meta">${pages.length} ${t("pages")} · ${new Date(book.updatedAt || book.createdAt).toLocaleDateString()}</p>
           </div>
-          ${submitted ? `<span class="chip ok">Submitted</span>` : ""}
+          ${submitted ? `<span class="chip ok">${t("submitted")}</span>` : ""}
         </div>
         ${book.prompt ? `<div class="saved-book-prompt"><strong>${t("prompt")}:</strong> ${html(book.prompt)}</div>` : ""}
         <p class="first-page-excerpt">${html(pages[0]?.text || "")}</p>
         <div class="saved-book-actions">
           <button class="secondary" type="button" data-read-saved-book="${book.id}">${t("read")}</button>
-          <button class="primary" type="button" data-submit-saved-book="${book.id}" ${submitted ? "disabled" : ""}>${submitted ? "Submitted" : "Submit"}</button>
+          <button class="primary" type="button" data-submit-saved-book="${book.id}" ${submitted ? "disabled" : ""}>${submitted ? t("submitted") : t("submit")}</button>
         </div>
       </div>
     </article>`;
@@ -1019,7 +1028,7 @@ function renderWork(work) {
 }
 
 function renderReview() {
-  return `<section class="card"><div class="section-head"><h3>Student Submissions</h3><span class="chip warn">${state.data.summary.pendingReview} ${t("pending")}</span></div><div class="list">${state.data.works.map(work => `<article class="item"><div class="section-head"><h4>${work.title}</h4>${statusChip(work.status)}</div><p>${work.content}</p><p>${work.feedback || ""}</p><div class="toolbar" style="margin-top:10px"><button class="secondary" type="button" data-read-work="${work.id}">${t("read")}</button><input data-score="${work.id}" type="number" min="0" max="100" value="${work.score || 75}" style="max-width:120px"><input data-comment="${work.id}" value="${work.teacherComment || "Good progress. Add more evidence and details."}"><button class="primary" data-review="${work.id}">${t("approve")}</button></div></article>`).join("")}</div></section>`;
+  return `<section class="card"><div class="section-head"><h3>${t("studentsubmissions")}</h3><span class="chip warn">${state.data.summary.pendingReview} ${t("pending")}</span></div><div class="list">${state.data.works.map(work => `<article class="item"><div class="section-head"><h4>${work.title}</h4>${statusChip(work.status)}</div><p>${work.content}</p><p>${work.feedback || ""}</p><div class="toolbar" style="margin-top:10px"><button class="secondary" type="button" data-read-work="${work.id}">${t("read")}</button><input data-score="${work.id}" type="number" min="0" max="100" value="${work.score || 75}" style="max-width:120px"><input data-comment="${work.id}" value="${work.teacherComment || "Good progress. Add more evidence and details."}"><button class="primary" data-review="${work.id}">${t("approve")}</button></div></article>`).join("")}</div></section>`;
 }
 
 function renderClass() {
